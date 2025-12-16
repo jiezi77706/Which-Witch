@@ -230,7 +230,17 @@ function WorkDetailTrigger({ work }: { work: any }) {
         work={work} 
         onClick={() => setOpen(true)}
       />
-      <WorkDetailDialog work={work} open={open} onOpenChange={setOpen} />
+      <WorkDetailDialog 
+        work={work} 
+        open={open} 
+        onOpenChange={setOpen}
+        nftStatus={undefined}
+        onMintNFT={undefined}
+        onBuyNFT={undefined}
+        onListNFT={undefined}
+        onRemix={undefined}
+        canBeRemixed={work?.allowRemix !== false}
+      />
     </>
   )
 }

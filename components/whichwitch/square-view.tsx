@@ -166,9 +166,14 @@ export function SquareView({
               key={work.id}
               work={work}
               allowTip={true}
+              isSquareView={true}
               onCollect={(folder) => handleCollect(work.id, folder)}
               folders={folders.map(f => f.name)}
               onCreateFolder={handleCreateFolder}
+              onRemix={() => {
+                // TODO: 实现二创授权逻辑
+                console.log('Request remix authorization for work:', work.id)
+              }}
               // NFT 相关 props
               nftStatus={nftStatuses[work.id]}
               onMintNFT={async () => {

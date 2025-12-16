@@ -13,7 +13,7 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@': './src/ui',
+      '@': './',
     };
     
     // 修复 MetaMask SDK 和其他依赖的问题

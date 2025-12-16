@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Heart, Bookmark, GitFork, Share2, Coins, Trash2, Clock, Folder, Lock, Upload, RefreshCcw } from "lucide-react"
+import { Heart, Bookmark, GitFork, Share2, Coins, Trash2, Clock, Folder, Lock, Upload, RefreshCcw, Eye } from "lucide-react"
 import { NFTStatusBadge, NFTStatus } from "./nft-status-badge"
 import { NFTActionButtons } from "./nft-action-buttons"
 import { MintNFTModal, BuyNFTModal, ListNFTModal } from "./nft-modals"
@@ -43,6 +43,8 @@ export function WorkCard({
   onMintNFT,
   onBuyNFT,
   onListNFT,
+  // 新增：是否为广场页面简化模式
+  isSquareView = false,
 }: {
   work: any
   isRemixable?: boolean
@@ -61,6 +63,8 @@ export function WorkCard({
   onMintNFT?: () => void
   onBuyNFT?: () => void
   onListNFT?: () => void
+  // 新增：是否为广场页面简化模式
+  isSquareView?: boolean
 }) {
   const { address } = useAccount()
   const [liked, setLiked] = useState(initialLiked)
@@ -293,7 +297,40 @@ export function WorkCard({
             </div>
 
             <div className="flex gap-2">
-              {onUnsave ? (
+              {isSquareView ? (
+                /* 广场页面 - 显示收藏和二创授权按钮 */
+                <div className="flex gap-2">
+                  {/* 二创授权按钮 */}
+                  {canBeRemixed && onRemix && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onRemix()
+                      }}
+                    >
+                      <GitFork className="w-3.5 h-3.5 mr-1.5" />
+                      Remix
+                    </Button>
+                  )}
+                  
+                  {/* 收藏按钮 */}
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-8 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowCollectModal(true)
+                    }}
+                  >
+                    <Bookmark className="w-3.5 h-3.5 mr-1.5 fill-current" />
+                    Collect
+                  </Button>
+                </div>
+              ) : onUnsave ? (
                 <>
                   {/* Collections View - 显示授权状态和NFT操作 */}
                   <div className="flex gap-2">
@@ -375,7 +412,7 @@ export function WorkCard({
                   </div>
                 </>
               ) : (
-                /* Square/Profile Tab Actions */
+                /* Profile Tab Actions */
                 <>
                   <div className="flex gap-2">
                     {/* 授权按钮 */}
@@ -453,9 +490,12 @@ export function WorkCard({
         work={work}
         open={showDetailsModal}
         onOpenChange={setShowDetailsModal}
-        selectedRemixer={selectedRemixer}
-        setSelectedRemixer={setSelectedRemixer}
-        genealogy={genealogy}
+        nftStatus={nftStatus}
+        onMintNFT={() => setShowMintNFTModal(true)}
+        onBuyNFT={() => setShowBuyNFTModal(true)}
+        onListNFT={() => setShowListNFTModal(true)}
+        onRemix={onRemix}
+        canBeRemixed={canBeRemixed}
       />
 
       {/* Quick Upload Modal for "Approved" state */}
@@ -747,7 +787,27 @@ function CollectModal({ open, onOpenChange, workTitle, folders = [], onCreateFol
   )
 }
 
-export function WorkDetailDialog({ work, open, onOpenChange }: any) {
+export function WorkDetailDialog({ 
+  work, 
+  open, 
+  onOpenChange,
+  nftStatus,
+  onMintNFT,
+  onBuyNFT,
+  onListNFT,
+  onRemix,
+  canBeRemixed = true
+}: {
+  work: any
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  nftStatus?: NFTStatus
+  onMintNFT?: () => void
+  onBuyNFT?: () => void
+  onListNFT?: () => void
+  onRemix?: () => void
+  canBeRemixed?: boolean
+}) {
   // Defensive check at the top of the component
   if (!work) return null
 
@@ -854,6 +914,80 @@ export function WorkDetailDialog({ work, open, onOpenChange }: any) {
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Action Buttons Section */}
+            <div className="pt-4 border-t border-border/50">
+              <h3 className="font-bold text-lg mb-4">Actions</h3>
+              <div className="flex flex-wrap gap-3">
+                {/* NFT Status Badge */}
+                {nftStatus && (
+                  <div className="mb-2">
+                    <NFTStatusBadge status={nftStatus} />
+                  </div>
+                )}
+                
+                {/* Remix Button */}
+                {canBeRemixed && onRemix && (
+                  <Button
+                    variant="outline"
+                    className="bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary"
+                    onClick={onRemix}
+                  >
+                    <GitFork className="w-4 h-4 mr-2" />
+                    Request Remix Authorization
+                  </Button>
+                )}
+                
+                {/* NFT Action Buttons */}
+                {nftStatus && (
+                  <div className="flex gap-2">
+                    {!nftStatus.isNFT && onMintNFT && (
+                      <Button
+                        variant="default"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={onMintNFT}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Mint as NFT
+                      </Button>
+                    )}
+                    
+                    {nftStatus.isListed && !nftStatus.isOwned && onBuyNFT && (
+                      <Button
+                        variant="default"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={onBuyNFT}
+                      >
+                        <Coins className="w-4 h-4 mr-2" />
+                        Buy NFT ({nftStatus.price} ETH)
+                      </Button>
+                    )}
+                    
+                    {nftStatus.isOwned && !nftStatus.isListed && onListNFT && (
+                      <Button
+                        variant="outline"
+                        className="border-yellow-500 text-yellow-600 hover:bg-yellow-50"
+                        onClick={onListNFT}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        List for Sale
+                      </Button>
+                    )}
+                    
+                    {nftStatus.isNFT && !nftStatus.isListed && !nftStatus.isOwned && (
+                      <Button
+                        variant="outline"
+                        disabled
+                        className="opacity-50"
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        NFT (Not for Sale)
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

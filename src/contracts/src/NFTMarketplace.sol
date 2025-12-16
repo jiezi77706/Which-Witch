@@ -151,6 +151,7 @@ contract NFTMarketplace is ReentrancyGuard {
             revert InsufficientPayment(listing.price, msg.value);
         }
 
+        // 缓存关键变量
         address seller = listing.seller;
         uint256 price = listing.price;
 
@@ -160,31 +161,30 @@ contract NFTMarketplace is ReentrancyGuard {
         // 转移NFT
         IERC721(nftManager).safeTransferFrom(seller, msg.sender, tokenId);
 
+        // 处理支付和版税分配
+        _processSalePayment(tokenId, seller, price);
+
+        emit TokenSold(tokenId, seller, msg.sender, price, (price * PLATFORM_FEE) / PERCENTAGE_BASE, block.timestamp);
+    }
+
+    /**
+     * @notice 处理NFT销售支付和版税分配
+     * @param tokenId NFT ID
+     * @param seller 卖家地址
+     * @param price 售价
+     */
+    function _processSalePayment(uint256 tokenId, address seller, uint256 price) internal {
         // 计算平台费用
         uint256 platformFee = (price * PLATFORM_FEE) / PERCENTAGE_BASE;
         uint256 remainingAmount = price - platformFee;
 
-        // 获取作品ID和创作者链
-        (bool success, bytes memory data) = nftManager.call(
-            abi.encodeWithSignature("getTokenWork(uint256)", tokenId)
-        );
-        require(success, "Failed to get work ID");
-        uint256 workId = abi.decode(data, (uint256));
+        // 获取作品ID
+        uint256 workId = _getWorkId(tokenId);
+        
+        // 获取创作者链
+        address[] memory creatorChain = _getCreatorChain(workId);
 
-        // 获取创作者链用于版税分配
-        (bool chainSuccess, bytes memory chainData) = nftManager.call(
-            abi.encodeWithSignature("getCreationManager()")
-        );
-        require(chainSuccess, "Failed to get creation manager");
-        address creationManager = abi.decode(chainData, (address));
-
-        (bool creatorsSuccess, bytes memory creatorsData) = creationManager.call(
-            abi.encodeWithSignature("getCreatorChain(uint256)", workId)
-        );
-        require(creatorsSuccess, "Failed to get creator chain");
-        address[] memory creatorChain = abi.decode(creatorsData, (address[]));
-
-        // 即时分配版税 - 不存储在合约中
+        // 即时分配版税
         _distributeNFTSaleRoyaltyInstant(workId, seller, creatorChain, remainingAmount);
 
         // 发送平台费用
@@ -196,8 +196,40 @@ contract NFTMarketplace is ReentrancyGuard {
             (bool refundSuccess,) = payable(msg.sender).call{value: msg.value - price}("");
             require(refundSuccess, "Refund failed");
         }
+    }
 
-        emit TokenSold(tokenId, seller, msg.sender, price, platformFee, block.timestamp);
+    /**
+     * @notice 获取NFT对应的作品ID
+     * @param tokenId NFT ID
+     * @return workId 作品ID
+     */
+    function _getWorkId(uint256 tokenId) internal view returns (uint256 workId) {
+        (bool success, bytes memory data) = nftManager.staticcall(
+            abi.encodeWithSignature("getTokenWork(uint256)", tokenId)
+        );
+        require(success, "Failed to get work ID");
+        workId = abi.decode(data, (uint256));
+    }
+
+    /**
+     * @notice 获取创作者链
+     * @param workId 作品ID
+     * @return creatorChain 创作者地址数组
+     */
+    function _getCreatorChain(uint256 workId) internal view returns (address[] memory creatorChain) {
+        // 获取CreationManager地址
+        (bool chainSuccess, bytes memory chainData) = nftManager.staticcall(
+            abi.encodeWithSignature("getCreationManager()")
+        );
+        require(chainSuccess, "Failed to get creation manager");
+        address creationManager = abi.decode(chainData, (address));
+
+        // 获取创作者链
+        (bool creatorsSuccess, bytes memory creatorsData) = creationManager.staticcall(
+            abi.encodeWithSignature("getCreatorChain(uint256)", workId)
+        );
+        require(creatorsSuccess, "Failed to get creator chain");
+        creatorChain = abi.decode(creatorsData, (address[]));
     }
 
     /**
@@ -217,64 +249,106 @@ contract NFTMarketplace is ReentrancyGuard {
         // 卖家获得70%
         uint256 sellerShare = (totalAmount * NFT_SELLER_SHARE) / PERCENTAGE_BASE;
         
+        // 即时转账给卖家
+        (bool success,) = payable(seller).call{value: sellerShare}("");
+        require(success, "Seller payment failed");
+
+        // 处理创作者版税
+        if (creatorChain.length > 0) {
+            _distributeCreatorRoyalties(creatorChain, totalAmount);
+        }
+
         // 准备事件数据
         address[] memory recipients = new address[](creatorChain.length + 1);
         uint256[] memory amounts = new uint256[](creatorChain.length + 1);
         
         recipients[0] = seller;
         amounts[0] = sellerShare;
-
-        // 即时转账给卖家
-        (bool sellerSuccess,) = payable(seller).call{value: sellerShare}("");
-        require(sellerSuccess, "Seller payment failed");
-
-        if (creatorChain.length == 0) {
-            // 没有创作者链，所有钱给卖家
-            emit NFTSaleRoyaltyDistributed(workId, seller, recipients, amounts, totalAmount, block.timestamp);
-            return;
+        
+        // 填充创作者数据
+        for (uint256 i = 0; i < creatorChain.length; i++) {
+            recipients[i + 1] = creatorChain[i];
+            amounts[i + 1] = _calculateCreatorShare(creatorChain, i, totalAmount);
         }
 
+        emit NFTSaleRoyaltyDistributed(workId, seller, recipients, amounts, totalAmount, block.timestamp);
+    }
+
+    /**
+     * @notice 分配创作者版税
+     * @param creatorChain 创作者链
+     * @param totalAmount 总金额
+     */
+    function _distributeCreatorRoyalties(address[] memory creatorChain, uint256 totalAmount) internal {
         if (creatorChain.length == 1) {
-            // 只有原创作者：获得20% + 10% = 30%
-            uint256 totalOriginalShare = ((totalAmount * NFT_ORIGINAL_CREATOR_SHARE) / PERCENTAGE_BASE) + 
-                                        ((totalAmount * NFT_MIDDLE_ANCESTORS_POOL) / PERCENTAGE_BASE);
-            recipients[1] = creatorChain[0];
-            amounts[1] = totalOriginalShare;
-            
-            // 即时转账给原创作者
-            (bool originalSuccess,) = payable(creatorChain[0]).call{value: totalOriginalShare}("");
-            require(originalSuccess, "Original creator payment failed");
+            // 只有原创作者：获得30%
+            uint256 share = ((totalAmount * NFT_ORIGINAL_CREATOR_SHARE) / PERCENTAGE_BASE) + 
+                           ((totalAmount * NFT_MIDDLE_ANCESTORS_POOL) / PERCENTAGE_BASE);
+            (bool success,) = payable(creatorChain[0]).call{value: share}("");
+            require(success, "Original creator payment failed");
         } else {
-            // 多个创作者：原创作者获得20%，中间创作者分享10%
+            // 原创作者获得20%
             uint256 originalShare = (totalAmount * NFT_ORIGINAL_CREATOR_SHARE) / PERCENTAGE_BASE;
-            recipients[1] = creatorChain[0];
-            amounts[1] = originalShare;
+            (bool success,) = payable(creatorChain[0]).call{value: originalShare}("");
+            require(success, "Original creator payment failed");
 
-            // 即时转账给原创作者
-            (bool originalSuccess,) = payable(creatorChain[0]).call{value: originalShare}("");
-            require(originalSuccess, "Original creator payment failed");
+            // 中间创作者分享10%
+            _distributeMiddleCreatorRoyalties(creatorChain, totalAmount);
+        }
+    }
 
+    /**
+     * @notice 分配中间创作者版税
+     * @param creatorChain 创作者链
+     * @param totalAmount 总金额
+     */
+    function _distributeMiddleCreatorRoyalties(address[] memory creatorChain, uint256 totalAmount) internal {
+        uint256 middlePool = (totalAmount * NFT_MIDDLE_ANCESTORS_POOL) / PERCENTAGE_BASE;
+        uint256 middleCreators = creatorChain.length - 1;
+        uint256 perMiddle = middlePool / middleCreators;
+
+        for (uint256 i = 1; i < creatorChain.length; i++) {
+            uint256 share = perMiddle;
+            // 处理余数
+            if (i == 1) {
+                share += middlePool - (perMiddle * middleCreators);
+            }
+            
+            (bool success,) = payable(creatorChain[i]).call{value: share}("");
+            require(success, "Middle creator payment failed");
+        }
+    }
+
+    /**
+     * @notice 计算创作者份额（用于事件）
+     * @param creatorChain 创作者链
+     * @param index 创作者索引
+     * @param totalAmount 总金额
+     * @return share 份额
+     */
+    function _calculateCreatorShare(
+        address[] memory creatorChain, 
+        uint256 index, 
+        uint256 totalAmount
+    ) internal pure returns (uint256 share) {
+        if (creatorChain.length == 1) {
+            // 只有原创作者：获得30%
+            share = ((totalAmount * NFT_ORIGINAL_CREATOR_SHARE) / PERCENTAGE_BASE) + 
+                   ((totalAmount * NFT_MIDDLE_ANCESTORS_POOL) / PERCENTAGE_BASE);
+        } else if (index == 0) {
+            // 原创作者获得20%
+            share = (totalAmount * NFT_ORIGINAL_CREATOR_SHARE) / PERCENTAGE_BASE;
+        } else {
             // 中间创作者分享10%
             uint256 middlePool = (totalAmount * NFT_MIDDLE_ANCESTORS_POOL) / PERCENTAGE_BASE;
             uint256 middleCreators = creatorChain.length - 1;
             uint256 perMiddle = middlePool / middleCreators;
-
-            for (uint256 i = 1; i < creatorChain.length; i++) {
-                uint256 share = perMiddle;
-                // 处理余数
-                if (i == 1) {
-                    share += middlePool - (perMiddle * middleCreators);
-                }
-                recipients[i + 1] = creatorChain[i];
-                amounts[i + 1] = share;
-                
-                // 即时转账给中间创作者
-                (bool middleSuccess,) = payable(creatorChain[i]).call{value: share}("");
-                require(middleSuccess, "Middle creator payment failed");
+            
+            share = perMiddle;
+            if (index == 1) {
+                share += middlePool - (perMiddle * middleCreators);
             }
         }
-
-        emit NFTSaleRoyaltyDistributed(workId, seller, recipients, amounts, totalAmount, block.timestamp);
     }
 
     /**

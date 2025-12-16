@@ -73,10 +73,10 @@ contract NFTManager is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
     /**
      * @notice 为作品铸造NFT
      * @param workId 作品ID
-     * @param tokenURI NFT元数据URI
+     * @param _tokenURI NFT元数据URI
      * @return tokenId 铸造的NFT ID
      */
-    function mintWorkNFT(uint256 workId, string calldata tokenURI) 
+    function mintWorkNFT(uint256 workId, string calldata _tokenURI) 
         external 
         nonReentrant 
         returns (uint256 tokenId) 
@@ -99,14 +99,14 @@ contract NFTManager is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
         // 铸造NFT
         tokenId = _nextTokenId++;
         _mint(msg.sender, tokenId);
-        _setTokenURI(tokenId, tokenURI);
+        _setTokenURI(tokenId, _tokenURI);
 
         // 更新映射关系
         workToTokenId[workId] = tokenId;
         tokenIdToWork[tokenId] = workId;
         workNFTMinted[workId] = true;
 
-        emit WorkNFTMinted(workId, tokenId, creator, tokenURI, block.timestamp);
+        emit WorkNFTMinted(workId, tokenId, creator, _tokenURI, block.timestamp);
     }
 
     /**

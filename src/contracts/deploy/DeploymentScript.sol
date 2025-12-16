@@ -26,7 +26,7 @@ pragma solidity ^0.8.20;
    - AuthorizationManager(creationManagerAddress, paymentManagerAddress)
 
 2. 部署NFT相关合约
-   - NFTManager("WhichWitch NFT", "WITCH")
+   - NFTManager("WhichWitch Creation NFT", "WWCNFT")
    - RoyaltyManager(creationManagerAddress, platformWallet) // 仅处理授权费
    - NFTMarketplace(nftManagerAddress, royaltyManagerAddress, platformWallet) // NFT销售即时到账
 

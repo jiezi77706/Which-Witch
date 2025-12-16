@@ -19,13 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/ui/*"]
+      "@/*": ["./*"]
     }
   },
   "include": [
     "next-env.d.ts",
-    "src/ui/**/*.ts",
-    "src/ui/**/*.tsx",
+    "**/*.ts",
+    "**/*.tsx",
     ".next/types/**/*.ts"
   ],
   "exclude": [

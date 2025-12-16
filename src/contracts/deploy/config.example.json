@@ -6,8 +6,8 @@
       "rpcUrl": "https://mainnet.base.org",
       "platformWallet": "0x1234567890123456789012345678901234567890",
       "nftCollection": {
-        "name": "WhichWitch NFT",
-        "symbol": "WITCH"
+        "name": "WhichWitch Creation NFT",
+        "symbol": "WWCNFT"
       }
     },
     "base-sepolia": {
@@ -16,8 +16,8 @@
       "rpcUrl": "https://sepolia.base.org",
       "platformWallet": "0x1234567890123456789012345678901234567890",
       "nftCollection": {
-        "name": "WhichWitch NFT Testnet",
-        "symbol": "WITCH"
+        "name": "WhichWitch Creation NFT Testnet",
+        "symbol": "WWCNFT"
       }
     },
     "ethereum": {
@@ -26,8 +26,8 @@
       "rpcUrl": "https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY",
       "platformWallet": "0x1234567890123456789012345678901234567890",
       "nftCollection": {
-        "name": "WhichWitch NFT",
-        "symbol": "WITCH"
+        "name": "WhichWitch Creation NFT",
+        "symbol": "WWCNFT"
       }
     }
   },
