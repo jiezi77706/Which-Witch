@@ -226,3 +226,174 @@ export const AuthorizationManagerABI = [
     outputs: [{ type: 'uint256' }]
   }
 ] as const;
+
+// NFT Manager ABI
+export const NFT_MANAGER_ABI = [
+  {
+    type: 'function',
+    name: 'mintWorkNFT',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'workId', type: 'uint256' },
+      { name: 'tokenURI', type: 'string' }
+    ],
+    outputs: [{ name: 'tokenId', type: 'uint256' }]
+  },
+  {
+    type: 'function',
+    name: 'getWorkTokenId',
+    stateMutability: 'view',
+    inputs: [{ name: 'workId', type: 'uint256' }],
+    outputs: [{ type: 'uint256' }]
+  },
+  {
+    type: 'function',
+    name: 'getTokenWork',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [{ type: 'uint256' }]
+  },
+  {
+    type: 'function',
+    name: 'isWorkNFTMinted',
+    stateMutability: 'view',
+    inputs: [{ name: 'workId', type: 'uint256' }],
+    outputs: [{ type: 'bool' }]
+  },
+  {
+    type: 'function',
+    name: 'ownerOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [{ type: 'address' }]
+  },
+  {
+    type: 'function',
+    name: 'tokenURI',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [{ type: 'string' }]
+  },
+  {
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'tokenId', type: 'uint256' }
+    ],
+    outputs: []
+  },
+  {
+    type: 'function',
+    name: 'setApprovalForAll',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'operator', type: 'address' },
+      { name: 'approved', type: 'bool' }
+    ],
+    outputs: []
+  },
+  {
+    type: 'event',
+    name: 'WorkNFTMinted',
+    inputs: [
+      { name: 'workId', type: 'uint256', indexed: true },
+      { name: 'tokenId', type: 'uint256', indexed: true },
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'tokenURI', type: 'string', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false }
+    ]
+  }
+] as const;
+
+// NFT Marketplace ABI
+export const NFT_MARKETPLACE_ABI = [
+  {
+    type: 'function',
+    name: 'listToken',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'tokenId', type: 'uint256' },
+      { name: 'price', type: 'uint256' }
+    ],
+    outputs: []
+  },
+  {
+    type: 'function',
+    name: 'buyToken',
+    stateMutability: 'payable',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: []
+  },
+  {
+    type: 'function',
+    name: 'cancelListing',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: []
+  },
+  {
+    type: 'function',
+    name: 'getListing',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'tokenId', type: 'uint256' },
+          { name: 'seller', type: 'address' },
+          { name: 'price', type: 'uint256' },
+          { name: 'active', type: 'bool' },
+          { name: 'timestamp', type: 'uint256' }
+        ]
+      }
+    ]
+  },
+  {
+    type: 'function',
+    name: 'getActiveListings',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256[]' }]
+  },
+  {
+    type: 'function',
+    name: 'getSellerListings',
+    stateMutability: 'view',
+    inputs: [{ name: 'seller', type: 'address' }],
+    outputs: [{ type: 'uint256[]' }]
+  },
+  {
+    type: 'event',
+    name: 'TokenListed',
+    inputs: [
+      { name: 'tokenId', type: 'uint256', indexed: true },
+      { name: 'seller', type: 'address', indexed: true },
+      { name: 'price', type: 'uint256', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false }
+    ]
+  },
+  {
+    type: 'event',
+    name: 'TokenSold',
+    inputs: [
+      { name: 'tokenId', type: 'uint256', indexed: true },
+      { name: 'seller', type: 'address', indexed: true },
+      { name: 'buyer', type: 'address', indexed: true },
+      { name: 'price', type: 'uint256', indexed: false },
+      { name: 'platformFee', type: 'uint256', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false }
+    ]
+  },
+  {
+    type: 'event',
+    name: 'ListingCancelled',
+    inputs: [
+      { name: 'tokenId', type: 'uint256', indexed: true },
+      { name: 'seller', type: 'address', indexed: true },
+      { name: 'timestamp', type: 'uint256', indexed: false }
+    ]
+  }
+] as const;

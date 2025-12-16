@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Heart, Bookmark, GitFork, Share2, Coins, Trash2, Clock, Folder, Lock, Upload, RefreshCcw } from "lucide-react"
+import { NFTStatusBadge, NFTStatus } from "./nft-status-badge"
+import { NFTActionButtons } from "./nft-action-buttons"
+import { MintNFTModal, BuyNFTModal, ListNFTModal } from "./nft-modals"
 import {
   Dialog,
   DialogContent,
@@ -35,6 +38,11 @@ export function WorkCard({
   folders = [],
   onCreateFolder,
   initialLiked = false,
+  // NFT 相关 props
+  nftStatus,
+  onMintNFT,
+  onBuyNFT,
+  onListNFT,
 }: {
   work: any
   isRemixable?: boolean
@@ -48,6 +56,11 @@ export function WorkCard({
   folders?: string[]
   onCreateFolder?: (name: string) => void
   initialLiked?: boolean
+  // NFT 相关类型
+  nftStatus?: NFTStatus
+  onMintNFT?: () => void
+  onBuyNFT?: () => void
+  onListNFT?: () => void
 }) {
   const { address } = useAccount()
   const [liked, setLiked] = useState(initialLiked)
@@ -57,6 +70,11 @@ export function WorkCard({
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [selectedRemixer, setSelectedRemixer] = useState(0)
+  
+  // NFT 相关状态
+  const [showMintNFTModal, setShowMintNFTModal] = useState(false)
+  const [showBuyNFTModal, setShowBuyNFTModal] = useState(false)
+  const [showListNFTModal, setShowListNFTModal] = useState(false)
   
   useEffect(() => {
     setLiked(initialLiked)
@@ -171,6 +189,11 @@ export function WorkCard({
           )}
 
           <div className="absolute top-3 right-3 flex flex-col gap-2 z-20 items-end pointer-events-none">
+            {/* NFT 状态徽章 */}
+            {nftStatus && (
+              <NFTStatusBadge status={nftStatus} />
+            )}
+            
             {work.isRemix && (
               <Badge
                 variant="secondary"
@@ -272,100 +295,141 @@ export function WorkCard({
             <div className="flex gap-2">
               {onUnsave ? (
                 <>
-                  {(status === "none" || !status) && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!canBeRemixed}
-                      className="h-8 bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={onRemix}
-                    >
-                      {canBeRemixed ? (
-                        <>
-                          <GitFork className="w-3.5 h-3.5 mr-1.5" />
-                          Remix
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="w-3.5 h-3.5 mr-1.5" />
-                          No Remix
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  {status === "pending" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled
-                      className="h-8 bg-transparent border-primary/30 text-muted-foreground opacity-70"
-                    >
-                      <Clock className="w-3.5 h-3.5 mr-1.5" />
-                      Reviewing
-                    </Button>
-                  )}
-                  {status === "approved" && (
-                    <Button
-                      size="sm"
-                      variant="default"
-                      className="h-8 bg-green-600 hover:bg-green-700 text-white border-none"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (onRemix) onRemix()
-                      }}
-                    >
-                      <Upload className="w-3.5 h-3.5 mr-1.5" />
-                      Upload Work
-                    </Button>
-                  )}
-                  {status === "rejected" && (
-                    <Button size="sm" variant="destructive" className="h-8" onClick={onRemix}>
-                      <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />
-                      Retry
-                    </Button>
-                  )}
-                  {status === "failed" && (
-                    <Button size="sm" variant="destructive" className="h-8" onClick={onRemix}>
-                      <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />
-                      Retry
-                    </Button>
-                  )}
+                  {/* Collections View - 显示授权状态和NFT操作 */}
+                  <div className="flex gap-2">
+                    {/* 授权相关按钮 */}
+                    {(status === "none" || !status) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!canBeRemixed}
+                        className="h-8 bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={onRemix}
+                      >
+                        {canBeRemixed ? (
+                          <>
+                            <GitFork className="w-3.5 h-3.5 mr-1.5" />
+                            Remix
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3.5 h-3.5 mr-1.5" />
+                            No Remix
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    {status === "pending" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled
+                        className="h-8 bg-transparent border-primary/30 text-muted-foreground opacity-70"
+                      >
+                        <Clock className="w-3.5 h-3.5 mr-1.5" />
+                        Reviewing
+                      </Button>
+                    )}
+                    {status === "approved" && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-8 bg-green-600 hover:bg-green-700 text-white border-none"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (onRemix) onRemix()
+                        }}
+                      >
+                        <Upload className="w-3.5 h-3.5 mr-1.5" />
+                        Upload Work
+                      </Button>
+                    )}
+                    {status === "rejected" && (
+                      <Button size="sm" variant="destructive" className="h-8" onClick={onRemix}>
+                        <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />
+                        Retry
+                      </Button>
+                    )}
+                    {status === "failed" && (
+                      <Button size="sm" variant="destructive" className="h-8" onClick={onRemix}>
+                        <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />
+                        Retry
+                      </Button>
+                    )}
+                    
+                    {/* NFT 操作按钮 */}
+                    {nftStatus && (
+                      <NFTActionButtons
+                        isNFT={nftStatus.isNFT}
+                        isListed={nftStatus.isListed}
+                        isOwned={nftStatus.isOwned}
+                        canMintNFT={!nftStatus.isNFT && onMintNFT !== undefined}
+                        canBuyNFT={nftStatus.isListed && !nftStatus.isOwned && onBuyNFT !== undefined}
+                        canListNFT={nftStatus.isOwned && !nftStatus.isListed && onListNFT !== undefined}
+                        price={nftStatus.price}
+                        onMintNFT={() => setShowMintNFTModal(true)}
+                        onBuyNFT={() => setShowBuyNFTModal(true)}
+                        onListNFT={() => setShowListNFTModal(true)}
+                      />
+                    )}
+                  </div>
                 </>
               ) : (
-                /* Logic for Square/Profile Tab Actions */
+                /* Square/Profile Tab Actions */
                 <>
-                  {isRemixable && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!canBeRemixed}
-                      className="h-8 bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={onRemix}
-                    >
-                      {canBeRemixed ? (
-                        <>
-                          <GitFork className="w-3.5 h-3.5 mr-1.5" />
-                          Remix
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="w-3.5 h-3.5 mr-1.5" />
-                          Locked
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  {!isRemixable && (
-                    <Button
-                      size="sm"
-                      variant="default"
-                      className="h-8 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
-                      onClick={() => setShowCollectModal(true)}
-                    >
-                      <Bookmark className="w-3.5 h-3.5 mr-1.5 fill-current" />
-                      Collect
-                    </Button>
-                  )}
+                  <div className="flex gap-2">
+                    {/* 授权按钮 */}
+                    {isRemixable && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!canBeRemixed}
+                        className="h-8 bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={onRemix}
+                      >
+                        {canBeRemixed ? (
+                          <>
+                            <GitFork className="w-3.5 h-3.5 mr-1.5" />
+                            Remix
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3.5 h-3.5 mr-1.5" />
+                            Locked
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    
+                    {/* 收藏按钮 */}
+                    {!isRemixable && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-8 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
+                        onClick={() => setShowCollectModal(true)}
+                      >
+                        <Bookmark className="w-3.5 h-3.5 mr-1.5 fill-current" />
+                        Collect
+                      </Button>
+                    )}
+                    
+                    {/* NFT 操作按钮 */}
+                    {nftStatus && (
+                      <NFTActionButtons
+                        isNFT={nftStatus.isNFT}
+                        isListed={nftStatus.isListed}
+                        isOwned={nftStatus.isOwned}
+                        canMintNFT={!nftStatus.isNFT && onMintNFT !== undefined}
+                        canBuyNFT={nftStatus.isListed && !nftStatus.isOwned && onBuyNFT !== undefined}
+                        canListNFT={nftStatus.isOwned && !nftStatus.isListed && onListNFT !== undefined}
+                        price={nftStatus.price}
+                        onMintNFT={() => setShowMintNFTModal(true)}
+                        onBuyNFT={() => setShowBuyNFTModal(true)}
+                        onListNFT={() => setShowListNFTModal(true)}
+                      />
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -397,12 +461,6 @@ export function WorkCard({
       {/* Quick Upload Modal for "Approved" state */}
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
         <DialogContent className="max-w-2xl bg-background/95 backdrop-blur-xl border-primary/20">
-          {/* We can reuse UploadView here or redirect, but for now let's just show a placeholder since we are inside a card component */}
-          {/* Better approach: The prompt implies this should trigger the creation flow. 
-               For this demo, I will render a simplified version of the UploadView's success state or a message.
-               However, to fully comply with "appear upload popup, content same as Create", 
-               I should probably just let the user know this would open the upload flow.
-           */}
           <DialogHeader>
             <DialogTitle>Upload Remix for "{work.title}"</DialogTitle>
             <DialogDescription>Your proposal was approved! You can now upload your work.</DialogDescription>
@@ -417,6 +475,45 @@ export function WorkCard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* NFT 相关模态框 */}
+      {nftStatus && (
+        <>
+          <MintNFTModal
+            open={showMintNFTModal}
+            onOpenChange={setShowMintNFTModal}
+            work={work}
+            onMint={async (tokenURI: string) => {
+              if (onMintNFT) {
+                await onMintNFT()
+              }
+            }}
+          />
+          
+          <BuyNFTModal
+            open={showBuyNFTModal}
+            onOpenChange={setShowBuyNFTModal}
+            work={work}
+            price={nftStatus.price || "0"}
+            onBuy={async () => {
+              if (onBuyNFT) {
+                await onBuyNFT()
+              }
+            }}
+          />
+          
+          <ListNFTModal
+            open={showListNFTModal}
+            onOpenChange={setShowListNFTModal}
+            work={work}
+            onList={async (price: string) => {
+              if (onListNFT) {
+                await onListNFT()
+              }
+            }}
+          />
+        </>
+      )}
     </>
   )
 }

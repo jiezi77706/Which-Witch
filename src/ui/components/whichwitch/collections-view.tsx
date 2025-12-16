@@ -22,6 +22,7 @@ import { useAccount } from "wagmi"
 import { createAuthorizationRequest, updateAuthorizationStatus, deleteAuthorizationRequest } from "@/lib/supabase/services"
 import { requestAuthorization } from "@/lib/web3/services/contract.service"
 import { useCollections } from "@/lib/hooks/useCollections"
+import { useMultipleNFTs } from "@/lib/web3/hooks/useNFT"
 import { Loader2 } from "lucide-react"
 
 export function CollectionsView({
@@ -44,6 +45,10 @@ export function CollectionsView({
     addFolder,
     removeCollection 
   } = useCollections(user?.id)
+
+  // 获取收藏作品的NFT状态
+  const workIds = collections.map(c => c.work_details?.work_id || c.works?.work_id).filter(Boolean)
+  const { nftStatuses, loading: nftLoading } = useMultipleNFTs(workIds)
 
   const [remixModalOpen, setRemixModalOpen] = useState(false)
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
@@ -267,6 +272,20 @@ export function CollectionsView({
                       onRemix={() => handleRemixClick(work)}
                       showSavedDate={true}
                       onUnsave={() => handleUnsave(work.id)}
+                      // NFT 相关 props
+                      nftStatus={nftStatuses[work.id]}
+                      onMintNFT={async () => {
+                        // TODO: 实现铸造NFT逻辑
+                        console.log('Mint NFT for work:', work.id)
+                      }}
+                      onBuyNFT={async () => {
+                        // TODO: 实现购买NFT逻辑
+                        console.log('Buy NFT for work:', work.id)
+                      }}
+                      onListNFT={async () => {
+                        // TODO: 实现上架NFT逻辑
+                        console.log('List NFT for work:', work.id)
+                      }}
                     />
                   ))}
                 </div>

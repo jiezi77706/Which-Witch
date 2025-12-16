@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useWorks } from "@/lib/hooks/useWorks"
 import { useUser } from "@/lib/hooks/useUser"
 import { useCollections } from "@/lib/hooks/useCollections"
+import { useMultipleNFTs } from "@/lib/web3/hooks/useNFT"
 
 export function SquareView({
   onCollect,
@@ -22,6 +23,10 @@ export function SquareView({
   const { works, loading, error } = useWorks()
   const { user } = useUser()
   const { folders: dbFolders, addCollection, addFolder } = useCollections(user?.id)
+  
+  // 获取所有作品的NFT状态
+  const workIds = works.map(work => work.work_id)
+  const { nftStatuses, loading: nftLoading } = useMultipleNFTs(workIds)
   
   // 使用数据库的文件夹，如果没有则使用 props
   const folders = dbFolders.length > 0 ? dbFolders : propFolders.map(name => ({ id: 0, name, user_id: 0, description: null, is_default: false, created_at: '', updated_at: '' }))
@@ -164,6 +169,20 @@ export function SquareView({
               onCollect={(folder) => handleCollect(work.id, folder)}
               folders={folders.map(f => f.name)}
               onCreateFolder={handleCreateFolder}
+              // NFT 相关 props
+              nftStatus={nftStatuses[work.id]}
+              onMintNFT={async () => {
+                // TODO: 实现铸造NFT逻辑
+                console.log('Mint NFT for work:', work.id)
+              }}
+              onBuyNFT={async () => {
+                // TODO: 实现购买NFT逻辑
+                console.log('Buy NFT for work:', work.id)
+              }}
+              onListNFT={async () => {
+                // TODO: 实现上架NFT逻辑
+                console.log('List NFT for work:', work.id)
+              }}
             />
           ))}
         </div>
