@@ -1,0 +1,140 @@
+由于文件系统问题，moderation-dashboard.tsx 无法直接写入。
+
+请手动创建文件：components/whichwitch/moderation-dashboard.tsx
+
+完整内容请参考已打开的编辑器中的文件，或者从以下位置复制：
+
+1. 从 IDE 编辑器中复制（文件已在编辑器中打开）
+2. 或者运行以下命令从备份创建：
+
+```bash
+# 方法1：从编辑器复制内容并粘贴到新文件
+
+# 方法2：使用以下简化版本
+cat > components/whichwitch/moderation-dashboard.tsx << 'EOF'
+"use client"
+
+import { useState, useEffect } from "react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Shield, Eye } from "lucide-react"
+import { useAccount } from "wagmi"
+import { DisputeReportViewer } from "./dispute-report-viewer"
+
+export function ModerationDashboard() {
+  const { address } = useAccount()
+  const [moderations, setModerations] = useState<any[]>([])
+  const [disputes, setDisputes] = useState<any[]>([])
+  const [selectedDispute, setSelectedDispute] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (address) {
+      fetchData()
+    }
+  }, [address])
+
+  const fetchData = async () => {
+    setIsLoading(true)
+    try {
+      const modResponse = await fetch(`/api/ai/content-moderation?address=${address}`)
+      const modData = await modResponse.json()
+      setModerations(modData.moderations || [])
+
+      const dispResponse = await fetch(`/api/ai/copyright-dispute?address=${address}`)
+      const dispData = await dispResponse.json()
+      setDisputes(dispData.disputes || [])
+    } catch (error) {
+      console.error('Failed to fetch data:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (!address) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Please connect your wallet</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Shield className="w-8 h-8 text-primary" />
+        <div>
+          <h2 className="text-2xl font-bold">AI Moderation Dashboard</h2>
+          <p className="text-sm text-muted-foreground">
+            View content moderation results and copyright disputes
+          </p>
+        </div>
+      </div>
+
+      <Tabs defaultValue="moderations" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="moderations">
+            Content Moderation ({moderations.length})
+          </TabsTrigger>
+          <TabsTrigger value="disputes">
+            Copyright Disputes ({disputes.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="moderations" className="space-y-4">
+          {isLoading ? (
+            <div className="text-center py-12">Loading...</div>
+          ) : moderations.length === 0 ? (
+            <div className="text-center py-12">No moderation records found</div>
+          ) : (
+            <ScrollArea className="h-[600px]">
+              <div className="space-y-3">
+                {moderations.map((mod) => (
+                  <Card key={mod.id} className="p-4">
+                    <p>{mod.work?.title || `Work #${mod.work_id}`}</p>
+                    <Badge>{mod.status}</Badge>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </TabsContent>
+
+        <TabsContent value="disputes" className="space-y-4">
+          {isLoading ? (
+            <div className="text-center py-12">Loading...</div>
+          ) : disputes.length === 0 ? (
+            <div className="text-center py-12">No disputes found</div>
+          ) : (
+            <ScrollArea className="h-[600px]">
+              <div className="space-y-3">
+                {disputes.map((dispute) => (
+                  <Card key={dispute.id} className="p-4">
+                    <p>Dispute #{dispute.id}</p>
+                    <Button onClick={() => setSelectedDispute(dispute)} size="sm">
+                      <Eye className="w-4 h-4 mr-2" />
+                      View Report
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <DisputeReportViewer
+        isOpen={!!selectedDispute}
+        onClose={() => setSelectedDispute(null)}
+        dispute={selectedDispute}
+      />
+    </div>
+  )
+}
+EOF
+```
+
+完整版本（包含所有样式和功能）请从 IDE 编辑器中复制。

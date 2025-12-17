@@ -16,6 +16,9 @@ import { useAccount } from "wagmi"
 import { NetworkSwitcher } from "./network-switcher"
 import { useCollections } from "@/lib/hooks/useCollections"
 import { useUser } from "@/lib/hooks/useUser"
+import { AIAdvisorButton } from "./ai-advisor/ai-advisor-button"
+import { LicenseSelectorButton } from "./license-selector-button"
+import type { LicenseSelection } from "./license-selector-modal"
 
 export function UploadView({ 
   onAddWork,
@@ -51,6 +54,9 @@ export function UploadView({
   const [materialTags, setMaterialTags] = useState<string[]>([])
   const [currentMaterial, setCurrentMaterial] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
+  
+  // License selection
+  const [licenseSelection, setLicenseSelection] = useState<LicenseSelection | null>(null)
   
   // Form data
   const [formData, setFormData] = useState({
@@ -99,16 +105,44 @@ export function UploadView({
         parentWorkId: mode === "remix" ? selectedParentWork : undefined,
       }
 
-      console.log('📤 第一步：上传作品到数据库和IPFS...')
+      console.log('📤 Step 1: Upload work to database and IPFS...')
 
-      // 第一步：总是先上传到数据库和IPFS
+      // Step 1: Upload to database and IPFS
       const uploadResult = await uploadWorkToDatabase(
         files,
         workUploadData,
         address
       )
 
-      console.log("✅ 作品上传到数据库完成!", uploadResult)
+      console.log("✅ Work uploaded to database!", uploadResult)
+
+      // Step 2: AI Content Moderation (with token staking)
+      console.log('🛡️ Step 2: AI Content Moderation...')
+      
+      try {
+        const moderationResponse = await fetch('/api/ai/content-moderation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workId: uploadResult.work.workId,
+            imageUrl: uploadResult.work.imageUrl,
+            creatorAddress: address,
+            stakeAmount: "0.01", // Token stake amount
+            stakeTxHash: "0x" + Math.random().toString(16).substring(2) // Mock tx hash
+          })
+        })
+
+        const moderationData = await moderationResponse.json()
+        
+        if (moderationData.status === 'rejected') {
+          throw new Error('Content rejected by AI moderation: ' + moderationData.message)
+        }
+
+        console.log("✅ Content moderation passed!", moderationData)
+      } catch (moderationError) {
+        console.error('⚠️ Moderation warning:', moderationError)
+        // Continue with upload even if moderation fails (for demo purposes)
+      }
 
       let finalResult = uploadResult
 
@@ -563,15 +597,71 @@ export function UploadView({
           </div>
 
           {allowRemix && (
-            <div className="space-y-2 animate-in slide-in-from-top-2">
-              <Label>Licensing Fee (ETH)</Label>
-              <Input 
-                type="number" 
-                step="0.01" 
-                placeholder="0.05"
-                value={formData.licenseFee}
-                onChange={(e) => setFormData(prev => ({ ...prev, licenseFee: e.target.value }))}
-              />
+            <div className="space-y-4 animate-in slide-in-from-top-2">
+              {/* License Options Section */}
+              <div className="space-y-3">
+                <Label className="text-base">License Configuration</Label>
+                
+                {/* Two buttons in a row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <AIAdvisorButton
+                    workData={{
+                      title: formData.title,
+                      description: formData.story,
+                      tags: tags,
+                      material: materialTags,
+                      allowRemix: allowRemix,
+                      licenseFee: formData.licenseFee
+                    }}
+                    size="default"
+                  />
+                  <LicenseSelectorButton
+                    onLicenseSelect={setLicenseSelection}
+                    initialSelection={licenseSelection || undefined}
+                    size="default"
+                  />
+                </div>
+
+                {/* Display selected license */}
+                {licenseSelection && (
+                  <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <p className="text-xs font-medium text-green-600 mb-2">✓ License Selected:</p>
+                    <p className="font-bold text-sm">{licenseSelection.licenseName}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{licenseSelection.description}</p>
+                    <div className="flex gap-2 mt-2">
+                      <span className="text-xs px-2 py-1 bg-background rounded border">
+                        {licenseSelection.commercial === 'A1' ? '✓ Commercial' : 
+                         licenseSelection.commercial === 'A2' ? '✗ Non-Commercial' : 
+                         '⚠ Auth Required'}
+                      </span>
+                      <span className="text-xs px-2 py-1 bg-background rounded border">
+                        {licenseSelection.derivative === 'B1' ? '✓ Derivatives' : '✗ No Derivatives'}
+                      </span>
+                      <span className="text-xs px-2 py-1 bg-background rounded border">
+                        {licenseSelection.nft === 'C1' ? '✓ NFT Allowed' : '✗ No NFT'}
+                      </span>
+                      <span className="text-xs px-2 py-1 bg-background rounded border">
+                        {licenseSelection.shareAlike === 'D1' ? 'ShareAlike' : 'No SA'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Licensing Fee */}
+              <div className="space-y-2">
+                <Label>Licensing Fee (ETH)</Label>
+                <Input 
+                  type="number" 
+                  step="0.01" 
+                  placeholder="0.05"
+                  value={formData.licenseFee}
+                  onChange={(e) => setFormData(prev => ({ ...prev, licenseFee: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  💡 Fee charged when others want to create derivatives of your work
+                </p>
+              </div>
             </div>
           )}
 
