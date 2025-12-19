@@ -31,6 +31,12 @@ export function MintToBlockchainButton({
   const [errorMessage, setErrorMessage] = useState("")
 
   const handleMint = async () => {
+    setStatus("error")
+    setErrorMessage("This feature has been replaced by the new upload flow. Please re-upload your work using the new upload process which directly mints to blockchain.")
+    return
+
+    // 旧的mint逻辑已禁用
+    /*
     setStatus("minting")
     setErrorMessage("")
 
@@ -113,6 +119,7 @@ export function MintToBlockchainButton({
       setErrorMessage(error instanceof Error ? error.message : "Minting failed")
       setStatus("error")
     }
+    */
   }
 
   // 如果作品已经上链，不显示按钮

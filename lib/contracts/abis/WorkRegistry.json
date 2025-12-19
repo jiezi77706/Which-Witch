@@ -1,0 +1,100 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "createWork",
+    "inputs": [
+      {"name": "metadataURI", "type": "string"},
+      {"name": "licenseFee", "type": "uint256"},
+      {"name": "allowRemix", "type": "bool"},
+      {"name": "parentWorkId", "type": "uint256"}
+    ],
+    "outputs": [{"name": "workId", "type": "uint256"}],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getWork",
+    "inputs": [{"name": "workId", "type": "uint256"}],
+    "outputs": [
+      {"name": "id", "type": "uint256"},
+      {"name": "creator", "type": "address"},
+      {"name": "creationType", "type": "uint8"},
+      {"name": "parentWorkId", "type": "uint256"},
+      {"name": "metadataURI", "type": "string"},
+      {"name": "licenseFee", "type": "uint256"},
+      {"name": "allowRemix", "type": "bool"},
+      {"name": "createdAt", "type": "uint256"},
+      {"name": "isActive", "type": "bool"}
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getCreatorWorks",
+    "inputs": [{"name": "creator", "type": "address"}],
+    "outputs": [{"name": "", "type": "uint256[]"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getWorkDerivatives",
+    "inputs": [{"name": "workId", "type": "uint256"}],
+    "outputs": [{"name": "", "type": "uint256[]"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isWorkCreator",
+    "inputs": [
+      {"name": "workId", "type": "uint256"},
+      {"name": "user", "type": "address"}
+    ],
+    "outputs": [{"name": "", "type": "bool"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "validateWorkCreator",
+    "inputs": [
+      {"name": "workId", "type": "uint256"},
+      {"name": "user", "type": "address"}
+    ],
+    "outputs": [{"name": "", "type": "bool"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "authorizeContract",
+    "inputs": [
+      {"name": "contractAddress", "type": "address"},
+      {"name": "authorized", "type": "bool"}
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "totalWorks",
+    "inputs": [],
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "WorkCreated",
+    "inputs": [
+      {"name": "workId", "type": "uint256", "indexed": true},
+      {"name": "creator", "type": "address", "indexed": true},
+      {"name": "creationType", "type": "uint8", "indexed": false},
+      {"name": "parentWorkId", "type": "uint256", "indexed": false},
+      {"name": "metadataURI", "type": "string", "indexed": false},
+      {"name": "licenseFee", "type": "uint256", "indexed": false},
+      {"name": "allowRemix", "type": "bool", "indexed": false}
+    ]
+  }
+]

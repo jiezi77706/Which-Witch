@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,9 @@ export function UploadView({
   const { user: dbUser } = useUser()
   const { collections, authStatuses } = useCollections(dbUser?.id)
   
+  // 使用 ref 跟踪上传状态，防止重复上传
+  const isUploadingRef = useRef(false)
+  
   const [mode, setMode] = useState<"original" | "remix">(preselectedParentWorkId ? "remix" : "original")
   const [selectedParentWork, setSelectedParentWork] = useState<number | null>(preselectedParentWorkId || null)
   
@@ -46,14 +49,12 @@ export function UploadView({
     }
   }, [preselectedParentWorkId])
 
-  const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle")
   const [files, setFiles] = useState<File[]>([])
   const [allowRemix, setAllowRemix] = useState(false)
   const [tags, setTags] = useState<string[]>([])
   const [currentTag, setCurrentTag] = useState("")
   const [materialTags, setMaterialTags] = useState<string[]>([])
   const [currentMaterial, setCurrentMaterial] = useState("")
-  const [errorMessage, setErrorMessage] = useState("")
   
   // License selection
   const [licenseSelection, setLicenseSelection] = useState<LicenseSelection | null>(null)
@@ -65,12 +66,7 @@ export function UploadView({
     licenseFee: "0.05"
   })
 
-  // NFT相关状态
-  const [mintNFT, setMintNFT] = useState(false)
-  const [nftMetadata, setNftMetadata] = useState({
-    name: "",
-    description: "",
-  })
+
 
   const SUGGESTED_TAGS = ["Cyberpunk", "Minimalist", "Nature", "Abstract", "Surreal"]
   const SUGGESTED_MATERIALS = ["Digital", "Wood", "Clay", "Glass", "Metal"]
@@ -83,17 +79,23 @@ export function UploadView({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // 防止重复提交
+    if (isUploadingRef.current) {
+      console.log('⚠️ Upload already in progress, ignoring duplicate submission')
+      return
+    }
+    
     if (files.length === 0 || !address) return
     if (mode === "remix" && !selectedParentWork) return
 
-    setStatus("uploading")
-    setErrorMessage("")
-
-    try {
-      // 使用新的分离式上传服务
-      const { uploadWorkToDatabase, mintExistingWork, mintNFTForWork } = await import('@/lib/services/work-upload.service')
-      
-      const workUploadData = {
+    // 立即设置上传标志并准备跳转到进度页面
+    isUploadingRef.current = true
+    
+    // 准备上传数据
+    const uploadData = {
+      files,
+      workData: {
         title: formData.title,
         description: formData.story,
         story: formData.story,
@@ -103,104 +105,15 @@ export function UploadView({
         licenseFee: formData.licenseFee,
         isRemix: mode === "remix",
         parentWorkId: mode === "remix" ? selectedParentWork : undefined,
-        licenseSelection: allowRemix ? licenseSelection : undefined,
-      }
+        licenseSelection: licenseSelection,
+      },
+      creatorAddress: address,
+      mode
+    }
 
-      console.log('📤 Step 1: Upload work to database and IPFS...')
-
-      // Step 1: Upload to database and IPFS
-      const uploadResult = await uploadWorkToDatabase(
-        files,
-        workUploadData,
-        address
-      )
-
-      console.log("✅ Work uploaded to database!", uploadResult)
-
-      // Step 2: AI Content Moderation (with token staking)
-      console.log('🛡️ Step 2: AI Content Moderation...')
-      
-      try {
-        const moderationResponse = await fetch('/api/ai/content-moderation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workId: uploadResult.work.workId,
-            imageUrl: uploadResult.work.imageUrl,
-            creatorAddress: address,
-            stakeAmount: "0.01", // Token stake amount
-            stakeTxHash: "0x" + Math.random().toString(16).substring(2) // Mock tx hash
-          })
-        })
-
-        const moderationData = await moderationResponse.json()
-        
-        if (moderationData.status === 'rejected') {
-          throw new Error('Content rejected by AI moderation: ' + moderationData.message)
-        }
-
-        console.log("✅ Content moderation passed!", moderationData)
-      } catch (moderationError) {
-        console.error('⚠️ Moderation warning:', moderationError)
-        // Continue with upload even if moderation fails (for demo purposes)
-      }
-
-      let finalResult = uploadResult
-
-      // 第二步：如果用户选择mint，则进行区块链操作
-      if (mintNFT) {
-        console.log('⛓️ 第二步：Mint到区块链...')
-        
-        const mintResult = await mintExistingWork(
-          uploadResult.work.workId,
-          workUploadData,
-          address,
-          uploadResult.work.metadataUri
-        )
-
-        console.log("✅ 区块链mint完成!", mintResult)
-
-        // 第三步：铸造NFT
-        console.log('🎨 第三步：铸造NFT...')
-        
-        const nftResult = await mintNFTForWork(
-          mintResult.blockchainWorkId,
-          address,
-          {
-            name: nftMetadata.name || formData.title,
-            description: nftMetadata.description || formData.story,
-            attributes: [
-              { trait_type: 'Upload Method', value: 'WhichWitch v2.0' },
-              { trait_type: 'Auto IPFS', value: 'Yes' },
-            ]
-          }
-        )
-
-        console.log("✅ NFT铸造完成!", nftResult)
-
-        // 更新最终结果
-        finalResult = {
-          ...uploadResult,
-          work: {
-            ...uploadResult.work,
-            workId: mintResult.blockchainWorkId,
-            txHash: mintResult.txHash
-          },
-          onChain: true
-        }
-      }
-
-      setStatus("success")
-      
-      // 通知父组件
-      if (onAddWork) {
-        onAddWork(finalResult)
-      }
-      
-    } catch (error) {
-      console.error("❌ 上传失败:", error)
-      setErrorMessage(error instanceof Error ? error.message : "Upload failed. Please try again.")
-      setStatus("error")
+    // 通知父组件切换到进度页面
+    if (onAddWork) {
+      onAddWork(uploadData)
     }
   }
 
@@ -227,35 +140,22 @@ export function UploadView({
         </div>
         <div className="space-y-2">
           <h2 className="text-2xl font-bold">
-            {mode === "remix" ? "Remix Uploaded!" : "Work Uploaded Successfully!"}
+            {mode === "remix" ? "Remix Uploaded Successfully!" : "Work Uploaded Successfully!"}
           </h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            {mintNFT 
-              ? "Your work has been uploaded to IPFS, recorded on the blockchain, and minted as an NFT!"
-              : "Your work has been uploaded to IPFS and saved to the database. It's now visible on the square page!"
-            }
+            Your work has been uploaded to IPFS and recorded on the blockchain!
           </p>
           
-          {mintNFT ? (
-            <div className="mt-4 p-3 bg-primary/10 border border-primary/20 rounded-lg text-sm">
-              <p className="font-medium text-primary mb-1">🎨 Complete NFT Creation!</p>
-              <p className="text-xs text-muted-foreground">
-                ✅ Uploaded to IPFS<br/>
-                ✅ Recorded on blockchain<br/>
-                ✅ Minted as NFT<br/>
-                Your work is now fully on-chain and tradeable!
-              </p>
-            </div>
-          ) : (
-            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm">
-              <p className="font-medium text-blue-500 mb-1">📤 Database Upload Complete!</p>
-              <p className="text-xs text-muted-foreground">
-                ✅ Uploaded to IPFS<br/>
-                ✅ Saved to database<br/>
-                💡 You can mint to blockchain later from your profile or the square page!
-              </p>
-            </div>
-          )}
+          <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-sm">
+            <p className="font-medium text-green-500 mb-1">🎉 Upload Complete!</p>
+            <p className="text-xs text-muted-foreground">
+              ✅ Images uploaded to IPFS<br/>
+              ✅ Metadata created and stored<br/>
+              ✅ Work registered on blockchain<br/>
+              ✅ Saved to database<br/>
+              Your work is now live and visible on the square page!
+            </p>
+          </div>
         </div>
         <Button onClick={() => {
           setStatus("idle")
@@ -264,8 +164,10 @@ export function UploadView({
           setTags([])
           setMaterialTags([])
           setSelectedParentWork(null)
-          setMintNFT(false)
-          setNftMetadata({ name: "", description: "" })
+
+          setUploadProgress({ current: 0, total: 0, step: "" })
+          // 重置上传标志
+          isUploadingRef.current = false
           if (onClearPreselection) onClearPreselection()
         }} className="w-full max-w-xs">
           Upload Another
@@ -290,7 +192,12 @@ export function UploadView({
             {errorMessage}
           </p>
         </div>
-        <Button onClick={() => setStatus("idle")} className="w-full max-w-xs">
+        <Button onClick={() => {
+          setStatus("idle")
+          setUploadProgress({ current: 0, total: 0, step: "" })
+          // 重置上传标志
+          isUploadingRef.current = false
+        }} className="w-full max-w-xs">
           Try Again
         </Button>
       </motion.div>
@@ -320,11 +227,13 @@ export function UploadView({
 
         {/* 上传流程说明 */}
         <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm">
-          <p className="font-medium text-blue-500 mb-2">📤 New Upload Flow</p>
+          <p className="font-medium text-blue-500 mb-2">⛓️ Blockchain Upload Flow</p>
           <div className="text-xs text-muted-foreground space-y-1">
-            <p>• <strong>Step 1:</strong> Your work is uploaded to IPFS and saved to database</p>
-            <p>• <strong>Step 2:</strong> Choose to mint to blockchain now or later</p>
-            <p>• <strong>Result:</strong> Work appears on square page immediately, mint when ready!</p>
+            <p>• <strong>Step 1:</strong> Upload images to IPFS</p>
+            <p>• <strong>Step 2:</strong> Create metadata on IPFS</p>
+            <p>• <strong>Step 3:</strong> Register work on blockchain</p>
+            <p>• <strong>Step 4:</strong> Save to database</p>
+            <p>• <strong>Result:</strong> Your work is permanently on-chain!</p>
           </div>
         </div>
 
@@ -444,7 +353,11 @@ export function UploadView({
             className="hidden"
             onChange={(e) => {
               const newFiles = Array.from(e.target.files || [])
-              setFiles(prev => [...prev, ...newFiles])
+              if (newFiles.length > 0) {
+                setFiles(newFiles) // 替换而不是追加，避免重复
+                // 清空input值，允许重新选择相同文件
+                e.target.value = ''
+              }
             }}
             accept="image/*,video/*"
             multiple
@@ -597,63 +510,70 @@ export function UploadView({
             <Switch checked={allowRemix} onCheckedChange={setAllowRemix} />
           </div>
 
-          {allowRemix && (
-            <div className="space-y-4 animate-in slide-in-from-top-2">
-              {/* License Options Section */}
-              <div className="space-y-3">
-                <Label className="text-base">License Configuration</Label>
-                
-                {/* Two buttons in a row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <AIAdvisorButton
-                    workData={{
-                      title: formData.title,
-                      description: formData.story,
-                      tags: tags,
-                      material: materialTags,
-                      allowRemix: allowRemix,
-                      licenseFee: formData.licenseFee
-                    }}
-                    size="default"
-                  />
-                  <LicenseSelectorButton
-                    onLicenseSelect={setLicenseSelection}
-                    initialSelection={licenseSelection || undefined}
-                    size="default"
-                  />
-                </div>
-
-                {/* Display selected license */}
-                {licenseSelection ? (
-                  <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
-                    <p className="text-xs font-medium text-green-600 mb-2">✓ License Selected:</p>
-                    <p className="font-bold text-sm">{licenseSelection.licenseName}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{licenseSelection.description}</p>
-                    <div className="flex gap-2 mt-2">
-                      <span className="text-xs px-2 py-1 bg-background rounded border">
-                        {licenseSelection.commercial === 'A1' ? '✓ Commercial' : 
-                         licenseSelection.commercial === 'A2' ? '✗ Non-Commercial' : 
-                         '⚠ Auth Required'}
-                      </span>
-                      <span className="text-xs px-2 py-1 bg-background rounded border">
-                        {licenseSelection.derivative === 'B1' ? '✓ Derivatives' : '✗ No Derivatives'}
-                      </span>
-                      <span className="text-xs px-2 py-1 bg-background rounded border">
-                        {licenseSelection.nft === 'C1' ? '✓ NFT Allowed' : '✗ No NFT'}
-                      </span>
-                      <span className="text-xs px-2 py-1 bg-background rounded border">
-                        {licenseSelection.shareAlike === 'D1' ? 'ShareAlike' : 'No SA'}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <p className="text-xs font-medium text-red-600 mb-1">⚠️ License Required</p>
-                    <p className="text-xs text-muted-foreground">Please select a license type to enable remixing</p>
-                  </div>
-                )}
+          {/* License Configuration - 必须选择 */}
+          <div className="space-y-4 p-4 border rounded-lg bg-blue-500/5 border-blue-500/20">
+            <div className="space-y-3">
+              <div>
+                <Label className="text-base text-blue-600">📄 License Configuration (Required)</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  All works must have a license. This defines how others can use your work.
+                </p>
+              </div>
+              
+              {/* Two buttons in a row */}
+              <div className="grid grid-cols-2 gap-3">
+                <AIAdvisorButton
+                  workData={{
+                    title: formData.title,
+                    description: formData.story,
+                    tags: tags,
+                    material: materialTags,
+                    allowRemix: allowRemix,
+                    licenseFee: formData.licenseFee
+                  }}
+                  size="default"
+                />
+                <LicenseSelectorButton
+                  onLicenseSelect={setLicenseSelection}
+                  initialSelection={licenseSelection || undefined}
+                  size="default"
+                />
               </div>
 
+              {/* Display selected license */}
+              {licenseSelection ? (
+                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <p className="text-xs font-medium text-green-600 mb-2">✓ License Selected:</p>
+                  <p className="font-bold text-sm">{licenseSelection.licenseName}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{licenseSelection.description}</p>
+                  <div className="flex gap-2 mt-2">
+                    <span className="text-xs px-2 py-1 bg-background rounded border">
+                      {licenseSelection.commercial === 'A1' ? '✓ Commercial' : 
+                       licenseSelection.commercial === 'A2' ? '✗ Non-Commercial' : 
+                       '⚠ Auth Required'}
+                    </span>
+                    <span className="text-xs px-2 py-1 bg-background rounded border">
+                      {licenseSelection.derivative === 'B1' ? '✓ Derivatives' : '✗ No Derivatives'}
+                    </span>
+                    <span className="text-xs px-2 py-1 bg-background rounded border">
+                      {licenseSelection.nft === 'C1' ? '✓ NFT Allowed' : '✗ No NFT'}
+                    </span>
+                    <span className="text-xs px-2 py-1 bg-background rounded border">
+                      {licenseSelection.shareAlike === 'D1' ? 'ShareAlike' : 'No SA'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-xs font-medium text-red-600 mb-1">⚠️ License Required</p>
+                  <p className="text-xs text-muted-foreground">Please select a license type before uploading</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {allowRemix && (
+            <div className="space-y-4 animate-in slide-in-from-top-2">
               {/* Licensing Fee */}
               <div className="space-y-2">
                 <Label>Licensing Fee (ETH)</Label>
@@ -671,66 +591,15 @@ export function UploadView({
             </div>
           )}
 
-          {/* NFT铸造选项 */}
-          <div className="space-y-4 p-4 border rounded-lg bg-primary/5 border-primary/20">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-base text-primary">🎨 Mint as NFT (Optional)</Label>
-                <p className="text-xs text-muted-foreground">
-                  Choose to mint your work as an NFT immediately, or upload to database first and mint later
-                </p>
-              </div>
-              <Switch checked={mintNFT} onCheckedChange={setMintNFT} />
-            </div>
 
-            {mintNFT && (
-              <div className="space-y-3 animate-in slide-in-from-top-2 pt-2 border-t border-primary/10">
-                <div className="space-y-2">
-                  <Label className="text-sm">NFT Name (Optional)</Label>
-                  <Input 
-                    placeholder={formData.title || "Leave empty to use work title"}
-                    value={nftMetadata.name}
-                    onChange={(e) => setNftMetadata(prev => ({ ...prev, name: e.target.value }))}
-                    className="text-sm"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-sm">NFT Description (Optional)</Label>
-                  <Textarea
-                    placeholder={formData.story || "Leave empty to use work story"}
-                    value={nftMetadata.description}
-                    onChange={(e) => setNftMetadata(prev => ({ ...prev, description: e.target.value }))}
-                    className="text-sm min-h-[60px]"
-                  />
-                </div>
-
-                <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                  <p className="font-medium mb-1">✨ Auto-generated NFT features:</p>
-                  <ul className="space-y-0.5 text-[10px]">
-                    <li>• IPFS metadata with your images</li>
-                    <li>• Material and tag attributes</li>
-                    <li>• Creator and work ID properties</li>
-                    <li>• External link to your work page</li>
-                  </ul>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
         <Button
           type="submit"
           className="w-full h-12 text-lg"
-          disabled={files.length === 0 || !formData.title || status === "uploading" || (mode === "remix" && !selectedParentWork) || (allowRemix && !licenseSelection)}
+          disabled={files.length === 0 || !formData.title || isUploadingRef.current || (mode === "remix" && !selectedParentWork) || !licenseSelection}
         >
-          {status === "uploading" 
-            ? (mintNFT ? "Uploading & Minting..." : "Uploading...") 
-            : (mintNFT 
-              ? (mode === "remix" ? "Upload & Mint Remix" : "Upload & Mint to Chain")
-              : (mode === "remix" ? "Upload Remix" : "Upload Work")
-            )
-          }
+          {mode === "remix" ? "Upload Remix to Blockchain" : "Upload Work to Blockchain"}
         </Button>
       </form>
     </div>

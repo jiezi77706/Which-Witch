@@ -8,6 +8,7 @@ import { MarketplaceView } from "./marketplace-view"
 import { CollectionsView } from "./collections-view"
 import { ProfileView } from "./profile-view"
 import { UploadResultPage } from "./upload-result-page"
+import { BlockchainUploadProgress } from "./blockchain-upload-progress"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Upload, Grid, Bookmark, User, ShoppingCart } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -30,18 +31,45 @@ export function WhichwitchApp() {
   // 上传结果页面状态
   const [showUploadResult, setShowUploadResult] = useState(false)
   const [uploadWorkData, setUploadWorkData] = useState<any>(null)
+  
+  // 区块链上传进度页面状态
+  const [showBlockchainUpload, setShowBlockchainUpload] = useState(false)
+  const [blockchainUploadData, setBlockchainUploadData] = useState<any>(null)
 
-  // TODO: 这些函数需要连接到实际的服务
-  const handleAddWork = (newWork: any) => {
-    // 显示上传结果页面
-    setUploadWorkData({
-      id: newWork.work?.workId,
-      title: newWork.work?.title || 'Untitled',
-      image: newWork.work?.imageUrl || '/placeholder.svg',
-      creator: user?.did || 'Unknown'
-    })
-    setShowUploadResult(true)
-    console.log('Add work:', newWork)
+  // 处理上传工作流
+  const handleAddWork = (uploadData: any) => {
+    // 检查是否是上传数据（需要进入进度页面）还是完成结果（显示结果页面）
+    if (uploadData.files && uploadData.workData) {
+      // 这是上传数据，显示区块链上传进度页面
+      setBlockchainUploadData(uploadData)
+      setShowBlockchainUpload(true)
+    } else {
+      // 这是完成结果，显示上传结果页面
+      setUploadWorkData({
+        id: uploadData.work?.workId,
+        title: uploadData.work?.title || 'Untitled',
+        image: uploadData.work?.imageUrl || '/placeholder.svg',
+        creator: user?.did || 'Unknown'
+      })
+      setShowUploadResult(true)
+    }
+    console.log('Add work:', uploadData)
+  }
+
+  // 处理区块链上传完成
+  const handleBlockchainUploadComplete = (result: any) => {
+    setShowBlockchainUpload(false)
+    setBlockchainUploadData(null)
+    
+    // 直接跳转到广场，不显示结果页面
+    setActiveTab("square")
+  }
+
+  // 处理区块链上传取消
+  const handleBlockchainUploadCancel = () => {
+    setShowBlockchainUpload(false)
+    setBlockchainUploadData(null)
+    setActiveTab("upload")
   }
 
   const handleCollect = async (workId: number, folderName: string) => {
@@ -62,6 +90,17 @@ export function WhichwitchApp() {
 
   if (!user) {
     return <AuthView onLogin={setUser} />
+  }
+
+  // 显示区块链上传进度页面
+  if (showBlockchainUpload && blockchainUploadData) {
+    return (
+      <BlockchainUploadProgress
+        uploadData={blockchainUploadData}
+        onComplete={handleBlockchainUploadComplete}
+        onCancel={handleBlockchainUploadCancel}
+      />
+    )
   }
 
   // 显示上传结果页面

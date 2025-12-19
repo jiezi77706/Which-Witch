@@ -74,9 +74,14 @@ export async function createWorkWithOptionalNFT(
     // 步骤1: 上传所有图片到IPFS
     // ============================================
     console.log('📸 步骤1: 上传图片到IPFS...')
-    const imageHashes = await Promise.all(
-      files.map(file => uploadFileToPinata(file))
-    )
+    
+    // 为了避免进度条闪烁，我们逐个上传文件而不是并行上传
+    const imageHashes: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      console.log(`📸 上传文件 ${i + 1}/${files.length}: ${files[i].name}`)
+      const hash = await uploadFileToPinata(files[i])
+      imageHashes.push(hash)
+    }
     const imageUrls = imageHashes.map(hash => 
       `https://gateway.pinata.cloud/ipfs/${hash}`
     )

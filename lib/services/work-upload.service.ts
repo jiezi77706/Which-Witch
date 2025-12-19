@@ -57,7 +57,8 @@ export interface WorkCreationResult {
 export async function uploadWorkToDatabase(
   files: File[],
   workData: WorkUploadData,
-  creatorAddress: string
+  creatorAddress: string,
+  onProgress?: (current: number, total: number, step: string) => void
 ): Promise<WorkCreationResult> {
   
   console.log('📤 开始上传作品到数据库和IPFS...')
@@ -67,9 +68,17 @@ export async function uploadWorkToDatabase(
     // 步骤1: 上传所有图片到IPFS
     // ============================================
     console.log('📸 步骤1: 上传图片到IPFS...')
-    const imageHashes = await Promise.all(
-      files.map(file => uploadFileToPinata(file))
-    )
+    
+    // 为了避免进度条闪烁，我们逐个上传文件而不是并行上传
+    const imageHashes: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      const fileName = files[i].name
+      console.log(`📸 上传文件 ${i + 1}/${files.length}: ${fileName}`)
+      onProgress?.(i, files.length, `上传图片: ${fileName}`)
+      
+      const hash = await uploadFileToPinata(files[i])
+      imageHashes.push(hash)
+    }
     const imageUrls = imageHashes.map(hash => 
       `https://gateway.pinata.cloud/ipfs/${hash}`
     )
@@ -85,6 +94,8 @@ export async function uploadWorkToDatabase(
     // 步骤2: 创建并上传作品metadata到IPFS
     // ============================================
     console.log('📝 步骤2: 创建作品metadata...')
+    onProgress?.(files.length, files.length, '创建作品metadata...')
+    
     const workMetadataHash = await createAndUploadMetadata({
       title: workData.title,
       description: workData.description,
@@ -104,6 +115,7 @@ export async function uploadWorkToDatabase(
     // 步骤3: 生成临时workId并保存到数据库
     // ============================================
     console.log('💾 步骤3: 保存到数据库...')
+    onProgress?.(files.length, files.length, '保存到数据库...')
     
     // 生成临时workId（使用时间戳 + 随机数）
     const tempWorkId = Date.now() + Math.floor(Math.random() * 1000)

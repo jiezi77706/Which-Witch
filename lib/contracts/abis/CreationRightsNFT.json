@@ -1,0 +1,124 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [{"name": "_workRegistry", "type": "address"}],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "mintWorkNFT",
+    "inputs": [{"name": "workId", "type": "uint256"}],
+    "outputs": [{"name": "tokenId", "type": "uint256"}],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "listNFT",
+    "inputs": [
+      {"name": "tokenId", "type": "uint256"},
+      {"name": "price", "type": "uint256"}
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "buyNFT",
+    "inputs": [{"name": "tokenId", "type": "uint256"}],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "hasWorkNFT",
+    "inputs": [{"name": "workId", "type": "uint256"}],
+    "outputs": [{"name": "", "type": "bool"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getWorkNFTId",
+    "inputs": [{"name": "workId", "type": "uint256"}],
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getNFTWorkId",
+    "inputs": [{"name": "tokenId", "type": "uint256"}],
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ownerOf",
+    "inputs": [{"name": "tokenId", "type": "uint256"}],
+    "outputs": [{"name": "", "type": "address"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tokenURI",
+    "inputs": [{"name": "tokenId", "type": "uint256"}],
+    "outputs": [{"name": "", "type": "string"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "balanceOf",
+    "inputs": [{"name": "owner", "type": "address"}],
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "approve",
+    "inputs": [
+      {"name": "to", "type": "address"},
+      {"name": "tokenId", "type": "uint256"}
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferFrom",
+    "inputs": [
+      {"name": "from", "type": "address"},
+      {"name": "to", "type": "address"},
+      {"name": "tokenId", "type": "uint256"}
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "NFTMinted",
+    "inputs": [
+      {"name": "tokenId", "type": "uint256", "indexed": true},
+      {"name": "workId", "type": "uint256", "indexed": true},
+      {"name": "creator", "type": "address", "indexed": true}
+    ]
+  },
+  {
+    "type": "event",
+    "name": "NFTListed",
+    "inputs": [
+      {"name": "tokenId", "type": "uint256", "indexed": true},
+      {"name": "workId", "type": "uint256", "indexed": true},
+      {"name": "seller", "type": "address", "indexed": true},
+      {"name": "price", "type": "uint256", "indexed": false}
+    ]
+  },
+  {
+    "type": "event",
+    "name": "NFTSold",
+    "inputs": [
+      {"name": "tokenId", "type": "uint256", "indexed": true},
+      {"name": "workId", "type": "uint256", "indexed": true},
+      {"name": "seller", "type": "address", "indexed": true},
+      {"name": "buyer", "type": "address", "indexed": false},
+      {"name": "price", "type": "uint256", "indexed": false}
+    ]
+  }
+]

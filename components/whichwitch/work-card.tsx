@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useAccount } from "wagmi"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,10 +10,11 @@ import { NFTStatusBadge, NFTStatus } from "./nft-status-badge"
 import { NFTActionButtons } from "./nft-action-buttons"
 import { MintNFTModal, BuyNFTModal, ListNFTModal } from "./nft-modals"
 import { MintNFTModal as RetroactiveMintModal } from "./mint-nft-modal"
-import { MintToBlockchainButton } from "./mint-to-blockchain-button"
+
 import { MintNFTModal as NewMintModal, SellNFTModal } from "./nft-mint-sell-modals"
 import { ContentModerationModal } from "./content-moderation-modal"
 import { ReportModal } from "./report-modal"
+import { WorkVoting } from "./work-voting"
 import {
   Dialog,
   DialogContent,
@@ -28,7 +30,6 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { processPayment } from "@/lib/web3/services/contract.service"
 import { toggleLike } from "@/lib/supabase/services/like.service"
-import { useAccount } from "wagmi"
 
 export function WorkCard({
   work,
@@ -443,8 +444,8 @@ export function WorkCard({
                     {/* 新的NFT功能按钮 - 根据用户行为链条 */}
                     {work.is_on_chain && work.upload_status === 'minted' && (
                       <>
-                        {/* 铸造NFT按钮 - 当作品已上链但未铸造NFT时显示 */}
-                        {(!nftStatus?.isNFT) && (
+                        {/* 铸造NFT按钮 - 当作品已上链但未铸造NFT时显示，且仅创作者可见 */}
+                        {(!nftStatus?.isNFT && work.creator_address?.toLowerCase() === address?.toLowerCase()) && (
                           <Button
                             size="sm"
                             variant="default"
@@ -683,10 +684,54 @@ export function WorkCard({
         work={work}
         onMint={async (nftData) => {
           console.log('🎨 Minting NFT with data:', nftData)
-          // TODO: 实现实际的NFT铸造逻辑
-          // 暂时模拟成功
-          await new Promise(resolve => setTimeout(resolve, 2000))
-          console.log('✅ NFT minted successfully (mock)')
+          
+          try {
+            // 导入NFT合约服务
+            const { CreationRightsNFTService } = await import('@/lib/contracts/services/creationRightsNFT.service')
+            const { ethers } = await import('ethers')
+            
+            // 获取provider和signer
+            if (typeof window !== 'undefined' && window.ethereum) {
+              const provider = new ethers.BrowserProvider(window.ethereum)
+              const signer = await provider.getSigner()
+              
+              // 创建NFT服务实例
+              const nftService = new CreationRightsNFTService(provider, signer)
+              
+              // 铸造NFT
+              const tokenId = await nftService.mintWorkNFT(work.id || work.work_id)
+              
+              console.log('✅ NFT minted successfully! Token ID:', tokenId)
+              
+              // 更新数据库中的NFT状态
+              try {
+                const response = await fetch('/api/works/sync-nft-status', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    workId: work.id || work.work_id,
+                    tokenId: tokenId,
+                    isMinted: true,
+                    ownerAddress: await signer.getAddress(),
+                  }),
+                })
+                
+                if (response.ok) {
+                  console.log('✅ NFT status updated in database')
+                }
+              } catch (dbError) {
+                console.error('⚠️ Failed to update NFT status in database:', dbError)
+              }
+              
+            } else {
+              throw new Error('Please connect your wallet to mint NFT')
+            }
+          } catch (error) {
+            console.error('❌ NFT minting failed:', error)
+            throw error
+          }
         }}
       />
       
@@ -1012,22 +1057,36 @@ export function WorkDetailDialog({
   }
 
   // 加载衍生作品
-  useEffect(() => {
-    if (open && work?.id && work?.allowRemix) {
-      loadDerivatives()
-    }
-  }, [open, work?.id])
+  const [genealogy, setGenealogy] = useState<{
+    root: any | null;
+    continuations: any[];
+    derivatives: any[];
+    totalDerivatives: number;
+  }>({
+    root: null,
+    continuations: [],
+    derivatives: [],
+    totalDerivatives: 0
+  })
 
-  const loadDerivatives = async () => {
-    if (!work?.id) return
+  useEffect(() => {
+    if (open && work?.work_id && work?.allowRemix) {
+      loadGenealogy()
+    }
+  }, [open, work?.work_id])
+
+  const loadGenealogy = async () => {
+    if (!work?.work_id) return
     
     setLoadingDerivatives(true)
     try {
-      const { getDerivativeWorks } = await import('@/lib/supabase/services/work.service')
-      const derivs = await getDerivativeWorks(work.id)
-      setDerivatives(derivs)
+      const { getWorkGenealogy } = await import('@/lib/supabase/services/work.service')
+      const genealogyData = await getWorkGenealogy(work.work_id)
+      setGenealogy(genealogyData)
+      // 保持向后兼容
+      setDerivatives([...genealogyData.continuations, ...genealogyData.derivatives])
     } catch (error) {
-      console.error('Failed to load derivatives:', error)
+      console.error('Failed to load genealogy:', error)
     } finally {
       setLoadingDerivatives(false)
     }
@@ -1037,31 +1096,39 @@ export function WorkDetailDialog({
   const safeTags = Array.isArray(work.tags) ? work.tags : []
   const safeImages = Array.isArray(work.images) ? work.images : []
   
-  // Build genealogy from actual data
-  const genealogy = work?.allowRemix
-    ? [
-        {
-          id: work.id,
-          title: work.title || "Untitled",
-          author: work.author || "Unknown",
-          date: work.createdAt || new Date().toLocaleDateString(),
-          type: work.isRemix ? "Remix" : "Original",
-          image: work.images?.[0] || work.image || "/placeholder.svg",
+  // Build genealogy display data
+  const genealogyDisplay = work?.allowRemix
+    ? {
+        root: {
+          id: genealogy.root?.work_id || work.work_id || work.id,
+          title: genealogy.root?.title || work.title || "Untitled",
+          author: genealogy.root?.creator_address || work.creator_address || work.author || "Unknown",
+          date: genealogy.root?.created_at || work.createdAt || new Date().toLocaleDateString(),
+          type: "Original",
+          image: genealogy.root?.image_url || work.images?.[0] || work.image || "/placeholder.svg",
         },
-        ...derivatives.slice(0, 5).map((deriv: any) => ({
+        continuations: genealogy.continuations.map((cont: any) => ({
+          id: cont.work_id,
+          title: cont.title,
+          author: cont.creator_address?.slice(0, 6) + '...' + cont.creator_address?.slice(-4),
+          date: new Date(cont.created_at).toLocaleDateString(),
+          type: "Canonical Extension",
+          image: cont.image_url || "/placeholder.svg",
+        })),
+        derivatives: genealogy.derivatives.map((deriv: any) => ({
           id: deriv.work_id,
           title: deriv.title,
           author: deriv.creator_address?.slice(0, 6) + '...' + deriv.creator_address?.slice(-4),
           date: new Date(deriv.created_at).toLocaleDateString(),
-          type: "Derivative",
+          type: "Authorized Derivative",
           image: deriv.image_url || "/placeholder.svg",
         }))
-      ]
-    : []
+      }
+    : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`${isFullscreen ? 'max-w-[100vw] h-[100vh] m-0 rounded-none' : 'max-w-[60vw] h-[80vh]'} flex flex-col p-0 gap-0 bg-background/95 backdrop-blur-xl border-primary/20 overflow-hidden transition-all duration-300`}>
+      <DialogContent className={`${isFullscreen ? 'max-w-[100vw] h-[100vh] m-0 rounded-none' : 'max-w-[60vw] h-[80vh]'} flex flex-col p-0 gap-0 bg-background/95 backdrop-blur-xl border-primary/20 overflow-hidden transition-all duration-300 [&>button]:hidden`}>
         <DialogHeader className="sr-only">
           <DialogTitle>Work Details: {work?.title || 'Untitled'}</DialogTitle>
         </DialogHeader>
@@ -1331,6 +1398,14 @@ export function WorkDetailDialog({
               </div>
             )}
 
+            {/* Community Voting Section */}
+            <WorkVoting 
+              work={work}
+              onVote={(votingId, optionId) => {
+                console.log('Vote submitted:', { votingId, optionId })
+              }}
+            />
+
             {/* Genealogy Section */}
             <div className="pt-6 border-t border-border/50">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
@@ -1346,66 +1421,148 @@ export function WorkDetailDialog({
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {loadingDerivatives ? (
                     <div className="text-center py-4 text-muted-foreground text-sm">
-                      Loading derivatives...
+                      Loading genealogy...
                     </div>
                   ) : (
                     <>
-                      <div className="relative pl-4 border-l-2 border-primary/20 space-y-6">
-                        {genealogy.map((node, i) => (
-                          <div key={node.id} className="relative">
+                      {/* Root Work */}
+                      {genealogyDisplay && (
+                        <div className="space-y-4">
+                          <div className="relative pl-4 border-l-2 border-primary/20">
                             <div className="absolute -left-[21px] top-2 w-3 h-3 rounded-full bg-primary ring-4 ring-background" />
-                            <div className="flex items-start gap-3 bg-muted/30 p-3 rounded-lg border border-border/50">
+                            <div className="flex items-start gap-3 bg-primary/5 p-3 rounded-lg border border-primary/20">
                               <div className="w-12 h-12 rounded bg-muted overflow-hidden shrink-0">
                                 <img
-                                  src={node.image || "/placeholder.svg"}
+                                  src={genealogyDisplay.root.image || "/placeholder.svg"}
                                   className="w-full h-full object-cover"
-                                  alt={node.title}
+                                  alt={genealogyDisplay.root.title}
                                 />
                               </div>
                               <div>
-                                <p className="text-xs font-bold uppercase text-primary mb-0.5">{node.type}</p>
-                                <p className="font-medium text-sm">{node.title}</p>
+                                <p className="text-xs font-bold uppercase text-primary mb-0.5">{genealogyDisplay.root.type}</p>
+                                <p className="font-medium text-sm">{genealogyDisplay.root.title}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  by {node.author} • {node.date}
+                                  by {genealogyDisplay.root.author} • {genealogyDisplay.root.date}
                                 </p>
                               </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
 
-                      <div className="pt-4 border-t border-border/30">
-                        <h4 className="text-sm font-bold mb-3">Derivative Statistics</h4>
-                        <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/10">
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">Total derivatives:</span>
-                            <span className="ml-2 font-bold text-primary">{derivatives.length}</span>
-                          </div>
-                        </div>
-                        {derivatives.length > 0 && (
-                          <div className="mt-3">
-                            <p className="text-xs font-bold uppercase text-muted-foreground mb-2">Recent Derivatives</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {derivatives.slice(0, 4).map((deriv: any) => (
-                                <div key={deriv.work_id} className="p-2 bg-muted/30 rounded-lg border border-border/50">
-                                  <img
-                                    src={deriv.image_url || "/placeholder.svg"}
-                                    className="w-full h-20 object-cover rounded mb-2"
-                                    alt={deriv.title}
-                                  />
-                                  <p className="text-xs font-medium truncate">{deriv.title}</p>
-                                  <p className="text-[10px] text-muted-foreground truncate">
-                                    by {deriv.creator_address?.slice(0, 6)}...{deriv.creator_address?.slice(-4)}
-                                  </p>
+                          {/* Official Continuations */}
+                          {genealogyDisplay.continuations.length > 0 && (
+                            <div className="space-y-3">
+                              <h4 className="text-sm font-bold text-purple-600 flex items-center gap-2">
+                                🟣 Official Continuations (by original creator)
+                              </h4>
+                              <div className="relative pl-4 border-l-2 border-purple-200 space-y-3">
+                                {genealogyDisplay.continuations.map((node: any, i: number) => (
+                                  <div key={node.id} className="relative">
+                                    <div className="absolute -left-[21px] top-2 w-3 h-3 rounded-full bg-purple-500 ring-4 ring-background" />
+                                    <div className="flex items-start gap-3 bg-purple-50 p-3 rounded-lg border border-purple-200">
+                                      <div className="w-12 h-12 rounded bg-muted overflow-hidden shrink-0">
+                                        <img
+                                          src={node.image || "/placeholder.svg"}
+                                          className="w-full h-full object-cover"
+                                          alt={node.title}
+                                        />
+                                      </div>
+                                      <div>
+                                        <p className="text-xs font-bold uppercase text-purple-600 mb-0.5">{node.type}</p>
+                                        <p className="font-medium text-sm">{node.title}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          by {node.author} • {node.date}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Community Derivatives */}
+                          {genealogyDisplay.derivatives.length > 0 && (
+                            <div className="space-y-3">
+                              <h4 className="text-sm font-bold text-blue-600 flex items-center gap-2">
+                                🔵 Community Derivatives
+                              </h4>
+                              <div className="relative pl-4 border-l-2 border-blue-200 space-y-3">
+                                {genealogyDisplay.derivatives.map((node: any, i: number) => (
+                                  <div key={node.id} className="relative">
+                                    <div className="absolute -left-[21px] top-2 w-3 h-3 rounded-full bg-blue-500 ring-4 ring-background" />
+                                    <div className="flex items-start gap-3 bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                      <div className="w-12 h-12 rounded bg-muted overflow-hidden shrink-0">
+                                        <img
+                                          src={node.image || "/placeholder.svg"}
+                                          className="w-full h-full object-cover"
+                                          alt={node.title}
+                                        />
+                                      </div>
+                                      <div>
+                                        <p className="text-xs font-bold uppercase text-blue-600 mb-0.5">{node.type}</p>
+                                        <p className="font-medium text-sm">{node.title}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          by {node.author} • {node.date}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Statistics */}
+                          <div className="pt-4 border-t border-border/30">
+                            <h4 className="text-sm font-bold mb-3">Creation Statistics</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                <div className="text-sm">
+                                  <span className="text-purple-700 font-medium">Official continuations:</span>
+                                  <span className="ml-2 font-bold text-purple-600">{genealogy.continuations.length}</span>
                                 </div>
-                              ))}
+                              </div>
+                              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                <div className="text-sm">
+                                  <span className="text-blue-700 font-medium">Community derivatives:</span>
+                                  <span className="ml-2 font-bold text-blue-600">{genealogy.derivatives.length}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-3 p-3 bg-primary/5 rounded-lg border border-primary/10">
+                              <div className="text-sm">
+                                <span className="text-foreground font-medium">Total derivatives:</span>
+                                <span className="ml-2 font-bold text-primary">{genealogy.totalDerivatives}</span>
+                              </div>
                             </div>
                           </div>
-                        )}
-                      </div>
+
+                          {/* Recent Derivatives Preview */}
+                          {(genealogy.continuations.length > 0 || genealogy.derivatives.length > 0) && (
+                            <div className="mt-4">
+                              <p className="text-xs font-bold uppercase text-muted-foreground mb-2">Recent Creations</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {[...genealogy.continuations, ...genealogy.derivatives].slice(0, 4).map((item: any) => (
+                                  <div key={item.work_id} className="p-2 bg-muted/30 rounded-lg border border-border/50">
+                                    <img
+                                      src={item.image_url || "/placeholder.svg"}
+                                      className="w-full h-20 object-cover rounded mb-2"
+                                      alt={item.title}
+                                    />
+                                    <p className="text-xs font-medium truncate">{item.title}</p>
+                                    <p className="text-[10px] text-muted-foreground truncate">
+                                      by {item.creator_address?.slice(0, 6)}...{item.creator_address?.slice(-4)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

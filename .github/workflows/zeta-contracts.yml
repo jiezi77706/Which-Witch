@@ -1,0 +1,114 @@
+name: ZetaChain Contracts CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: 
+      - 'src/contracts/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/contracts/**'
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  check:
+    strategy:
+      fail-fast: true
+
+    name: Foundry project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Show Foundry config
+        run: forge config
+        working-directory: src/contracts
+
+      - name: Run Forge build
+        run: |
+          forge --version
+          forge build --sizes
+        id: build
+        working-directory: src/contracts
+
+      - name: Run Forge tests
+        run: |
+          forge test -vvv
+        id: test
+        working-directory: src/contracts
+
+      - name: Run Forge coverage
+        run: |
+          forge coverage --report lcov
+        id: coverage
+        working-directory: src/contracts
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: src/contracts/lcov.info
+          flags: foundry
+
+  deploy-testnet:
+    needs: check
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: testnet
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Deploy to ZetaChain Testnet
+        run: |
+          forge script script/DeployZetaPayment.s.sol:DeployZetaPayment \
+            --rpc-url ${{ secrets.ZETA_TESTNET_RPC_URL }} \
+            --private-key ${{ secrets.PRIVATE_KEY }} \
+            --broadcast \
+            --verify \
+            --etherscan-api-key ${{ secrets.ZETASCAN_API_KEY }} \
+            -vvvv
+        working-directory: src/contracts
+
+  deploy-mainnet:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: mainnet
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Deploy to ZetaChain Mainnet
+        run: |
+          forge script script/DeployZetaPayment.s.sol:DeployZetaPayment \
+            --rpc-url ${{ secrets.ZETA_MAINNET_RPC_URL }} \
+            --private-key ${{ secrets.MAINNET_PRIVATE_KEY }} \
+            --broadcast \
+            --verify \
+            --etherscan-api-key ${{ secrets.ZETASCAN_API_KEY }} \
+            -vvvv
+        working-directory: src/contracts
