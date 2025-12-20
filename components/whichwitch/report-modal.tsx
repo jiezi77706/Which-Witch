@@ -501,13 +501,53 @@ export function ReportModal({ open, onOpenChange, work, onReportComplete }: Repo
                 </div>
               )}
 
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-                <Clock className="w-4 h-4 inline mr-2 text-green-600" />
-                <span className="text-green-800">
-                  Your report has been submitted and will be reviewed by our moderation team. 
-                  You will be notified of any actions taken.
-                </span>
-              </div>
+              {/* 根据AI审核结果显示不同的提示信息 */}
+              {result?.arbitrationReport ? (
+                <div className="space-y-3">
+                  {result.arbitrationReport.similarityScore < 20 ? (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+                      <CheckCircle2 className="w-4 h-4 inline mr-2 text-green-600" />
+                      <span className="text-green-800 font-medium">
+                        ✅ Content Review Complete
+                      </span>
+                      <p className="text-green-700 text-xs mt-2">
+                        AI analysis shows this work appears to be original with no significant copyright concerns. 
+                        The work has been approved for display on the platform.
+                      </p>
+                    </div>
+                  ) : result.arbitrationReport.similarityScore < 50 ? (
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
+                      <AlertTriangle className="w-4 h-4 inline mr-2 text-yellow-600" />
+                      <span className="text-yellow-800 font-medium">
+                        ⚠️ Under Review
+                      </span>
+                      <p className="text-yellow-700 text-xs mt-2">
+                        AI detected some similarities that require human review. 
+                        Our moderation team will examine this work and notify you of the decision.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
+                      <XCircle className="w-4 h-4 inline mr-2 text-red-600" />
+                      <span className="text-red-800 font-medium">
+                        🚨 Copyright Concern Detected
+                      </span>
+                      <p className="text-red-700 text-xs mt-2">
+                        AI analysis detected significant similarities with existing content. 
+                        This report has been escalated to our moderation team for detailed review.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+                  <Clock className="w-4 h-4 inline mr-2 text-green-600" />
+                  <span className="text-green-800">
+                    Your report has been submitted and will be reviewed by our moderation team. 
+                    You will be notified of any actions taken.
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

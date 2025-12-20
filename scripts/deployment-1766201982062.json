@@ -1,0 +1,16 @@
+{
+  "network": "Sepolia Testnet",
+  "chainId": 11155111,
+  "timestamp": "2025-12-20T03:39:42.059Z",
+  "deployer": "0x169f03c4d0C3C4D0e64B194ACf024F13c9C7F514",
+  "contracts": {
+    "NEXT_PUBLIC_CONTRACT_ADDRESS_CREATION": "0x74Cca0302a14d7bcA60389de48B38150584B25F2",
+    "NEXT_PUBLIC_CONTRACT_ADDRESS_PAYMENT": "0xd2c2EC069425FF06ea1EE639507fc6a1c2Bb9c5f",
+    "NEXT_PUBLIC_CONTRACT_ADDRESS_AUTHORIZATION": "0xACB3F1A4dD6D581996e9eD0651975d7C3Bc33b67"
+  },
+  "explorerUrls": {
+    "CreationManager": "https://sepolia.etherscan.io/address/0x74Cca0302a14d7bcA60389de48B38150584B25F2",
+    "PaymentManager": "https://sepolia.etherscan.io/address/0xd2c2EC069425FF06ea1EE639507fc6a1c2Bb9c5f",
+    "AuthorizationManager": "https://sepolia.etherscan.io/address/0xACB3F1A4dD6D581996e9eD0651975d7C3Bc33b67"
+  }
+}

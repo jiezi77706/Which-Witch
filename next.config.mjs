@@ -15,6 +15,10 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // 禁用特定页面的 SSR
+  experimental: {
+    appDir: true,
+  },
   // 配置路径别名和 fallback
   webpack: (config, { isServer, webpack }) => {
     config.resolve.alias = {

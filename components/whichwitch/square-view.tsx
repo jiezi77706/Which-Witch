@@ -81,8 +81,9 @@ export function SquareView({
     title: work.title,
     author: work.creator_address.slice(0, 6) + '...' + work.creator_address.slice(-4),
     image: work.image_url,
+    images: work.images, // 添加这个字段
     tags: work.tags || [],
-    material: work.material?.join(', ') || '',
+    material: Array.isArray(work.material) ? work.material.join(', ') : (work.material || ''),
     likes: work.like_count || 0,
     remixCount: work.remix_count || 0,
     allowRemix: work.allow_remix,
@@ -96,7 +97,7 @@ export function SquareView({
       w.title.toLowerCase().includes(search.toLowerCase()) ||
       w.author.toLowerCase().includes(search.toLowerCase()) ||
       w.tags.some((t: string) => t.toLowerCase().includes(search.toLowerCase())) ||
-      w.material?.toLowerCase().includes(search.toLowerCase()),
+      (Array.isArray(w.material) ? w.material.join(' ') : (w.material || '')).toLowerCase().includes(search.toLowerCase()),
   )
 
   return (
@@ -170,10 +171,7 @@ export function SquareView({
               onCollect={(folder) => handleCollect(work.id, folder)}
               folders={folders.map(f => f.name)}
               onCreateFolder={handleCreateFolder}
-              onRemix={() => {
-                // TODO: 实现二创授权逻辑
-                console.log('Request remix authorization for work:', work.id)
-              }}
+              // 移除onRemix，广场页面不需要remix功能
               // NFT 相关 props
               nftStatus={nftStatuses[work.id]}
               onMintNFT={async () => {

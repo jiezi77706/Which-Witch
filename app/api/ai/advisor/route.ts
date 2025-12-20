@@ -87,10 +87,18 @@ Current Work Information:
 
     console.log('🤖 Calling Qwen API for advisor consultation...')
 
-    const response = await fetch(`${process.env.QWEN_BASE_URL}/chat/completions`, {
+    // AI License Advisor 使用文本模式的 OpenAI 兼容端点
+    const QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    const QWEN_API_KEY = process.env.QWEN_API_KEY
+
+    if (!QWEN_API_KEY) {
+      throw new Error('QWEN_API_KEY is not configured')
+    }
+
+    const response = await fetch(`${QWEN_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.QWEN_API_KEY}`,
+        'Authorization': `Bearer ${QWEN_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -111,6 +119,7 @@ Current Work Information:
 
     const data = await response.json()
     
+    // OpenAI 兼容模式的响应格式
     if (!data.choices?.[0]?.message?.content) {
       throw new Error('Invalid AI response format')
     }

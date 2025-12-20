@@ -20,6 +20,63 @@ interface ArbitrationResult {
   detailedAnalysis: any
 }
 
+// 下载图片并转换为Base64
+async function downloadImageAsBase64(imageUrl: string): Promise<string> {
+  try {
+    console.log(`📥 下载图片: ${imageUrl}`)
+    
+    // 如果是IPFS URL，尝试多个网关
+    let urlsToTry = [imageUrl]
+    if (imageUrl.includes('gateway.pinata.cloud') || imageUrl.includes('/ipfs/')) {
+      const ipfsHash = imageUrl.split('/ipfs/')[1]
+      if (ipfsHash) {
+        urlsToTry = [
+          imageUrl,
+          `https://ipfs.io/ipfs/${ipfsHash}`,
+          `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`,
+          `https://dweb.link/ipfs/${ipfsHash}`
+        ]
+      }
+    }
+    
+    let lastError: Error | null = null
+    for (const url of urlsToTry) {
+      try {
+        console.log(`   尝试网关: ${url}`)
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        })
+        
+        if (!response.ok) {
+          console.log(`   ❌ ${response.status} ${response.statusText}`)
+          lastError = new Error(`Failed to download image: ${response.status} ${response.statusText}`)
+          continue
+        }
+        
+        const arrayBuffer = await response.arrayBuffer()
+        const buffer = Buffer.from(arrayBuffer)
+        const base64 = buffer.toString('base64')
+        const mimeType = response.headers.get('content-type') || 'image/jpeg'
+        
+        console.log(`✅ 图片下载成功，大小: ${buffer.length} bytes`)
+        return `data:${mimeType};base64,${base64}`
+      } catch (error) {
+        console.log(`   ❌ 网关失败: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        lastError = error instanceof Error ? error : new Error('Unknown error')
+        continue
+      }
+    }
+    
+    throw lastError || new Error('All IPFS gateways failed')
+    
+  } catch (error) {
+    console.error(`❌ 图片下载失败: ${imageUrl}`, error)
+    throw error
+  }
+}
+
 // 调用Qwen-VL进行版权相似度分析
 async function analyzeCopyrightSimilarity(
   reportedImageUrl: string, 
@@ -28,6 +85,12 @@ async function analyzeCopyrightSimilarity(
   originalWork: any
 ): Promise<ArbitrationResult> {
   try {
+    console.log('🔍 开始版权相似度分析...')
+    
+    // 下载并转换图片为Base64
+    const originalImageBase64 = await downloadImageAsBase64(originalImageUrl)
+    const reportedImageBase64 = await downloadImageAsBase64(reportedImageUrl)
+    
     const response = await fetch(QWEN_API_URL, {
       method: 'POST',
       headers: {
@@ -41,8 +104,8 @@ async function analyzeCopyrightSimilarity(
             {
               role: 'user',
               content: [
-                { image: originalImageUrl },
-                { image: reportedImageUrl },
+                { image: originalImageBase64 },
+                { image: reportedImageBase64 },
                 { 
                   text: `Perform a detailed copyright similarity analysis between these two artworks:
 
@@ -87,16 +150,23 @@ Return ONLY valid JSON.`
     })
 
     if (!response.ok) {
-      throw new Error(`Qwen API error: ${response.statusText}`)
+      const errorText = await response.text()
+      console.error('❌ Qwen API错误响应:', errorText)
+      throw new Error(`Qwen API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()
     const aiResponse = data.output?.choices?.[0]?.message?.content?.[0]?.text || '{}'
     
+    console.log('🤖 AI版权分析响应:', aiResponse)
+    
     let aiAnalysis
     try {
-      aiAnalysis = JSON.parse(aiResponse)
-    } catch {
+      // 清理响应文本，移除可能的markdown代码块标记
+      const cleanResponse = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      aiAnalysis = JSON.parse(cleanResponse)
+    } catch (parseError) {
+      console.error('❌ AI响应解析失败:', parseError)
       // 如果解析失败，使用基础分析
       aiAnalysis = {
         similarityScore: 25,
@@ -235,13 +305,93 @@ export async function POST(request: NextRequest) {
     // 根据相似度分数决定后续行动
     let finalStatus = 'resolved'
     let actionTaken = 'none'
+    let autoLockResult = null
 
-    if (arbitrationResult.similarityScore >= 50) {
-      // 高相似度 - 可能是抄袭
+    if (arbitrationResult.similarityScore >= 90) {
+      // 极高相似度 (90%+) - 自动禁用提款
+      finalStatus = 'withdrawal_disabled'
+      actionTaken = 'auto_withdrawal_disabled'
+      
+      console.log(`🚨 极高相似度检测 (${arbitrationResult.similarityScore}%)，自动禁用提款功能...`)
+      
+      try {
+        // 动态导入版权保护服务
+        const { lockUserFunds, disableUserWithdrawals } = await import('@/lib/web3/services/copyright-protection.service')
+        
+        // 1. 锁定资金
+        const lockResult = await lockUserFunds(
+          reportedWork.creator_address,
+          `Automatic lock due to extreme plagiarism similarity (${arbitrationResult.similarityScore}%)`,
+          reportId
+        )
+        
+        // 2. 禁用提款
+        const disableResult = await disableUserWithdrawals(
+          reportedWork.creator_address,
+          `Withdrawal disabled due to ${arbitrationResult.similarityScore}% plagiarism similarity`,
+          reportId,
+          'critical'
+        )
+        
+        autoLockResult = {
+          success: lockResult.success && disableResult.success,
+          lockTxHash: lockResult.txHash,
+          disableTxHash: disableResult.txHash,
+          error: lockResult.success && disableResult.success 
+            ? null 
+            : `Lock: ${lockResult.error || 'OK'}, Disable: ${disableResult.error || 'OK'}`
+        }
+        
+        if (autoLockResult.success) {
+          console.log(`✅ 用户 ${reportedWork.creator_address} 资金已锁定且提款已禁用`)
+        }
+        
+      } catch (lockError) {
+        console.error('❌ 自动锁定失败:', lockError)
+        autoLockResult = {
+          success: false,
+          error: lockError instanceof Error ? lockError.message : 'Lock service error'
+        }
+      }
+      
+    } else if (arbitrationResult.similarityScore >= 80) {
+      // 高相似度 (80-89%) - 仅锁定资金
+      finalStatus = 'auto_locked'
+      actionTaken = 'auto_funds_locked'
+      
+      console.log(`⚠️ 高相似度检测 (${arbitrationResult.similarityScore}%)，自动锁定资金...`)
+      
+      try {
+        const { lockUserFunds } = await import('@/lib/web3/services/copyright-protection.service')
+        
+        const lockResult = await lockUserFunds(
+          reportedWork.creator_address,
+          `Automatic lock due to high plagiarism similarity (${arbitrationResult.similarityScore}%)`,
+          reportId
+        )
+        
+        autoLockResult = {
+          success: lockResult.success,
+          lockTxHash: lockResult.txHash,
+          error: lockResult.error
+        }
+        
+        if (autoLockResult.success) {
+          console.log(`✅ 用户 ${reportedWork.creator_address} 资金已锁定`)
+        }
+        
+      } catch (lockError) {
+        console.error('❌ 资金锁定失败:', lockError)
+        autoLockResult = {
+          success: false,
+          error: lockError instanceof Error ? lockError.message : 'Lock service error'
+        }
+      }
+      
+    } else if (arbitrationResult.similarityScore >= 50) {
+      // 中高相似度 - 标记为高风险
       finalStatus = 'escalated'
       actionTaken = 'high_similarity_detected'
-      
-      // TODO: 可以在这里添加自动锁定作品的逻辑
       console.log('🚨 High similarity detected - flagging for manual review')
       
     } else if (arbitrationResult.similarityScore >= 20) {
@@ -283,9 +433,14 @@ export async function POST(request: NextRequest) {
         disputedAreas: arbitrationResult.disputedAreas,
         timelineAnalysis: arbitrationResult.timelineAnalysis,
         actionTaken,
-        status: finalStatus
+        status: finalStatus,
+        autoLock: autoLockResult
       },
-      message: `Arbitration completed. Similarity score: ${arbitrationResult.similarityScore}%`
+      message: arbitrationResult.similarityScore >= 90 && autoLockResult?.success
+        ? `CRITICAL: ${arbitrationResult.similarityScore}% similarity detected. User funds locked and withdrawal disabled.`
+        : arbitrationResult.similarityScore >= 80 && autoLockResult?.success
+        ? `HIGH RISK: ${arbitrationResult.similarityScore}% similarity detected. User funds locked.`
+        : `Arbitration completed. Similarity score: ${arbitrationResult.similarityScore}%`
     })
 
   } catch (error) {

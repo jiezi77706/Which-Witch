@@ -58,6 +58,7 @@ export function CollectionsView({
   const [selectedWork, setSelectedWork] = useState<any>(null)
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [paymentError, setPaymentError] = useState("")
+  const [derivativeType, setDerivativeType] = useState("new-story")
   
   const { address } = useAccount()
 
@@ -85,7 +86,7 @@ export function CollectionsView({
       author: work.creator_address.slice(0, 6) + '...' + work.creator_address.slice(-4),
       image: work.image_url,
       tags: work.tags || [],
-      material: work.material?.join(', ') || '',
+      material: Array.isArray(work.material) ? work.material.join(', ') : (work.material || ''),
       likes: work.like_count || 0,
       remixCount: work.remix_count || work.total_derivatives || 0,
       allowRemix: work.allow_remix,
@@ -312,7 +313,7 @@ export function CollectionsView({
       <Dialog open={remixModalOpen} onOpenChange={setRemixModalOpen}>
         <DialogContent className="max-w-sm sm:max-w-md bg-background/95 backdrop-blur-xl border-primary/20">
           <DialogHeader>
-            <DialogTitle>Apply for Remix License</DialogTitle>
+            <DialogTitle>Apply for Derivative License</DialogTitle>
             <DialogDescription>Create a derivative work based on "{selectedWork?.title}".</DialogDescription>
           </DialogHeader>
 
@@ -335,15 +336,18 @@ export function CollectionsView({
             </div>
 
             <div className="space-y-3">
-              <Label>Remix Type</Label>
-              <Select defaultValue="reprocess">
+              <Label>Derivative Type</Label>
+              <Select value={derivativeType} onValueChange={setDerivativeType}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="reprocess">Reprocess (New Material)</SelectItem>
-                  <SelectItem value="remake">Remake (Visual Interpretation)</SelectItem>
-                  <SelectItem value="mix">Mix (Combined with other works)</SelectItem>
+                  <SelectItem value="new-story">New Storyline (新故事线)</SelectItem>
+                  <SelectItem value="new-skin">New Skin/Design (新皮肤)</SelectItem>
+                  <SelectItem value="fanart">Fan Art (同人创作)</SelectItem>
+                  <SelectItem value="crossover">Crossover (联动)</SelectItem>
+                  <SelectItem value="au">Alternative Universe (平行世界)</SelectItem>
+                  <SelectItem value="prequel">Prequel/Sequel (前传/续集)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -369,7 +373,7 @@ export function CollectionsView({
               onClick={handlePayAndMint}
             >
               <GitFork className="w-4 h-4 mr-2" /> 
-              {paymentLoading ? "Processing..." : "Pay & Mint License"}
+              {paymentLoading ? "Processing..." : "Pay & Get License"}
             </Button>
             {paymentError && (
               <p className="text-red-500 text-sm mt-2">{paymentError}</p>

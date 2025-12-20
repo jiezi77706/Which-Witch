@@ -31,9 +31,71 @@ interface ModerationResult {
   aiAnalysis: any
 }
 
+// 下载图片并转换为Base64
+async function downloadImageAsBase64(imageUrl: string): Promise<string> {
+  try {
+    console.log(`📥 下载图片: ${imageUrl}`)
+    
+    // 如果是IPFS URL，尝试多个网关
+    let urlsToTry = [imageUrl]
+    if (imageUrl.includes('gateway.pinata.cloud') || imageUrl.includes('/ipfs/')) {
+      const ipfsHash = imageUrl.split('/ipfs/')[1]
+      if (ipfsHash) {
+        urlsToTry = [
+          imageUrl,
+          `https://ipfs.io/ipfs/${ipfsHash}`,
+          `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`,
+          `https://dweb.link/ipfs/${ipfsHash}`
+        ]
+      }
+    }
+    
+    let lastError: Error | null = null
+    for (const url of urlsToTry) {
+      try {
+        console.log(`   尝试网关: ${url}`)
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        })
+        
+        if (!response.ok) {
+          console.log(`   ❌ ${response.status} ${response.statusText}`)
+          lastError = new Error(`Failed to download image: ${response.status} ${response.statusText}`)
+          continue
+        }
+        
+        const arrayBuffer = await response.arrayBuffer()
+        const buffer = Buffer.from(arrayBuffer)
+        const base64 = buffer.toString('base64')
+        const mimeType = response.headers.get('content-type') || 'image/jpeg'
+        
+        console.log(`✅ 图片下载成功，大小: ${buffer.length} bytes`)
+        return `data:${mimeType};base64,${base64}`
+      } catch (error) {
+        console.log(`   ❌ 网关失败: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        lastError = error instanceof Error ? error : new Error('Unknown error')
+        continue
+      }
+    }
+    
+    throw lastError || new Error('All IPFS gateways failed')
+    
+  } catch (error) {
+    console.error(`❌ 图片下载失败: ${imageUrl}`, error)
+    throw error
+  }
+}
+
 // Call Qwen-VL API for content moderation
 async function analyzeContentWithQwen(imageUrl: string): Promise<ModerationResult> {
   try {
+    console.log('🔍 开始内容审核分析...')
+    
+    // 下载并转换图片为Base64
+    const imageBase64 = await downloadImageAsBase64(imageUrl)
+    
     const response = await fetch(QWEN_API_URL, {
       method: 'POST',
       headers: {
@@ -47,7 +109,7 @@ async function analyzeContentWithQwen(imageUrl: string): Promise<ModerationResul
             {
               role: 'user',
               content: [
-                { image: imageUrl },
+                { image: imageBase64 },
                 { 
                   text: `Analyze this image for content moderation. Detect and score the following:
 1. NSFW content (nudity, sexual content) - score 0-100
@@ -75,16 +137,23 @@ Return ONLY valid JSON.`
     })
 
     if (!response.ok) {
-      throw new Error(`Qwen API error: ${response.statusText}`)
+      const errorText = await response.text()
+      console.error('❌ Qwen API错误响应:', errorText)
+      throw new Error(`Qwen API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()
     const aiResponse = data.output?.choices?.[0]?.message?.content?.[0]?.text || '{}'
     
+    console.log('🤖 AI审核响应:', aiResponse)
+    
     let aiAnalysis
     try {
-      aiAnalysis = JSON.parse(aiResponse)
-    } catch {
+      // 清理响应文本，移除可能的markdown代码块标记
+      const cleanResponse = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      aiAnalysis = JSON.parse(cleanResponse)
+    } catch (parseError) {
+      console.error('❌ AI响应解析失败:', parseError)
       aiAnalysis = { error: 'Failed to parse AI response', rawResponse: aiResponse }
     }
 
