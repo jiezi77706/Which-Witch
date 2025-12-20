@@ -3,18 +3,20 @@
 import { useState, useEffect } from "react"
 import { useAccount } from "wagmi"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Heart, Bookmark, GitFork, Share2, Coins, Trash2, Clock, Folder, Lock, Upload, RefreshCcw, Eye, Shield, ShoppingCart, Copy, Maximize2, Minimize2, X, Flag } from "lucide-react"
+import { Heart, Bookmark, GitFork, Share2, Coins, Trash2, Clock, Folder, Lock, Upload, RefreshCcw, Eye, Shield, ShoppingCart, Copy, Maximize2, Minimize2, X, Flag, Vote, Zap } from "lucide-react"
 import { NFTStatusBadge, NFTStatus } from "./nft-status-badge"
 import { NFTActionButtons } from "./nft-action-buttons"
 import { MintNFTModal, BuyNFTModal, ListNFTModal } from "./nft-modals"
 import { MintNFTModal as RetroactiveMintModal } from "./mint-nft-modal"
+import { UniversalPaymentButton } from "./universal-payment-button"
 
 import { MintNFTModal as NewMintModal, SellNFTModal } from "./nft-mint-sell-modals"
 import { ContentModerationModal } from "./content-moderation-modal"
 import { ReportModal } from "./report-modal"
 import { WorkVoting } from "./work-voting"
+import { MintToBlockchainButton } from "./mint-to-blockchain-button"
 import {
   Dialog,
   DialogContent,
@@ -27,9 +29,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Input } from "@/components/ui/input"
+import { CreationGenealogy } from "./creation-genealogy"
 import { cn } from "@/lib/utils"
 import { processPayment } from "@/lib/web3/services/contract.service"
 import { toggleLike } from "@/lib/supabase/services/like.service"
+import { Progress } from "@/components/ui/progress"
 
 export function WorkCard({
   work,
@@ -51,6 +55,11 @@ export function WorkCard({
   onListNFT,
   // 新增：是否为广场页面简化模式
   isSquareView = false,
+  // 投票相关 props
+  showLaunchVote = false,
+  onLaunchVote,
+  // 新增：投票状态
+  votingStatus,
 }: {
   work: any
   isRemixable?: boolean
@@ -71,6 +80,15 @@ export function WorkCard({
   onListNFT?: () => void
   // 新增：是否为广场页面简化模式
   isSquareView?: boolean
+  // 投票相关类型
+  showLaunchVote?: boolean
+  onLaunchVote?: () => void
+  // 新增：投票状态
+  votingStatus?: {
+    hasVoting: boolean
+    votingStatus?: 'active' | 'ended' | 'upcoming'
+    votingTitle?: string
+  }
 }) {
   const { address } = useAccount()
   const [liked, setLiked] = useState(initialLiked)
@@ -115,36 +133,11 @@ export function WorkCard({
   const canBeRemixed = work?.allowRemix !== false
   const isRemixActionAvailable = isRemixable && canBeRemixed
 
-  // Build genealogy with proper null checks
-  const genealogy = work?.allowRemix
-    ? [
-        {
-          id: "root",
-          title: work.title || "Untitled",
-          author: work.author || "Unknown",
-          date: work.createdAt || "2023-01-01",
-          type: "Original",
-          image: work.image || "/placeholder.svg",
-        },
-        ...(work.remixCount > 0 && Array.isArray(work.remixers) && work.remixers.length > 0
-          ? work.remixers.slice(0, 3).map((remixer: string, idx: number) => ({
-              id: `child${idx}`,
-              title: `Remix by ${remixer}`,
-              author: remixer,
-              date: new Date(
-                new Date(work.createdAt || Date.now()).getTime() + (idx + 1) * 30 * 24 * 60 * 60 * 1000,
-              ).toLocaleDateString(),
-              type: "Remix",
-              image: work.images?.[idx % work.images.length] || work.image || "/placeholder.svg",
-            }))
-          : []),
-      ]
-    : []
-  // </CHANGE>
+  // Removed old genealogy logic - now handled by CreationGenealogy component
 
   const handleCardClick = (e: any) => {
-    // Prevent click when clicking buttons
-    if (e.target.closest("button")) return
+    // Prevent click when clicking buttons or dropdown menus
+    if (e.target.closest("button") || e.target.closest("[role='menuitem']") || e.target.closest("[data-radix-popper-content-wrapper]")) return
     if (onClick) {
       onClick()
     } else {
@@ -166,6 +159,24 @@ export function WorkCard({
             src={work.images?.[0] || work.image || "/placeholder.svg"}
             alt={work.title}
             className="object-cover w-full h-full transform group-hover:scale-110 transition-transform duration-700"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              const originalSrc = img.src;
+              
+              // 如果是Pinata网关，尝试备用网关
+              if (originalSrc.includes('gateway.pinata.cloud')) {
+                const hash = originalSrc.split('/ipfs/')[1];
+                if (hash) {
+                  img.src = `https://ipfs.io/ipfs/${hash}`;
+                  return;
+                }
+              }
+              
+              // 如果是备用网关也失败了，使用占位符
+              if (originalSrc.includes('ipfs.io')) {
+                img.src = "/placeholder.svg";
+              }
+            }}
           />
           
           {work.images && work.images.length > 1 && (
@@ -179,12 +190,18 @@ export function WorkCard({
             <Button
               variant="secondary"
               size="sm"
-              className="bg-white/10 hover:bg-white/20 text-white backdrop-blur-md border border-white/10"
+              className="bg-white/10 hover:bg-white/20 text-white backdrop-blur-md border border-white/10 h-8 w-8 p-0"
               onClick={() => setShowDetailsModal(true)}
+              title="View Details"
             >
-              View Details
+              <Eye className="w-4 h-4" />
             </Button>
-            <Button size="icon" variant="ghost" className="text-white hover:bg-white/20 rounded-full">
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              className="text-white hover:bg-white/20 rounded-full h-8 w-8 p-0"
+              title="Share"
+            >
               <Share2 className="w-4 h-4" />
             </Button>
           </div>
@@ -278,72 +295,37 @@ export function WorkCard({
                 size="sm"
                 className={`${liked ? "text-pink-500" : "text-muted-foreground hover:text-pink-500"} px-2 h-8 transition-colors`}
                 onClick={handleLike}
+                title={`${liked ? 'Unlike' : 'Like'} (${likeCount})`}
               >
-                <Heart className={`w-4 h-4 mr-1.5 ${liked ? "fill-current" : ""}`} />
-                <span className="font-mono text-xs">{likeCount}</span>
+                <Heart className={`w-4 h-4 ${liked ? "fill-current" : ""}`} />
+                <span className="font-mono text-xs ml-1">{likeCount}</span>
               </Button>
               {work.allowRemix && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-primary px-2 h-8 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowDetailsModal(true)
-                  }}
-                >
-                  <GitFork className="w-4 h-4 mr-1.5" />
-                  <span className="font-mono text-xs">{work.remixCount || 0}</span>
-                </Button>
-              )}
-              {allowTip && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-yellow-500 px-2 h-8 transition-colors"
-                  onClick={() => setShowTipModal(true)}
-                >
-                  <Coins className="w-4 h-4 mr-1.5" />
-                  <span className="font-mono text-xs">Tip</span>
-                </Button>
+                <div className="flex items-center text-muted-foreground px-2 h-8" title={`${work.remixCount || 0} remixes`}>
+                  <GitFork className="w-4 h-4" />
+                  <span className="font-mono text-xs ml-1">{work.remixCount || 0}</span>
+                </div>
               )}
             </div>
 
             <div className="flex gap-2">
               {isSquareView ? (
-                /* 广场页面 - 只显示图标按钮 */
+                /* 广场页面 - 显示打赏按钮和收藏按钮在右侧 */
                 <div className="flex gap-1">
-                  {/* 二创授权按钮 - 只显示图标 */}
-                  {canBeRemixed && onRemix && (
-                    <Button
+                  {/* 打赏按钮 - 使用通用支付按钮 */}
+                  {allowTip && (
+                    <UniversalPaymentButton
+                      workId={work.id || work.work_id}
+                      creatorAddress={work.creator_address || work.creator || '0x0000000000000000000000000000000000000000'}
+                      creatorName={work.author}
+                      workTitle={work.title}
+                      paymentType="tip"
                       size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 text-primary hover:bg-primary/10"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onRemix()
-                      }}
-                      title="Request Remix"
-                    >
-                      <GitFork className="w-4 h-4" />
-                    </Button>
+                      className="h-8 px-3 bg-transparent border-border/50 hover:border-primary/50 hover:bg-primary/5 text-muted-foreground hover:text-primary"
+                    />
                   )}
                   
-                  {/* AI审核按钮 - 只显示图标 */}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 p-0 text-orange-600 hover:bg-orange-50"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowContentModerationModal(true)
-                    }}
-                    title="AI Content Review"
-                  >
-                    <Shield className="w-4 h-4" />
-                  </Button>
-                  
-                  {/* 收藏按钮 - 只显示图标 */}
+                  {/* 收藏按钮 - 图标按钮 */}
                   <Button
                     size="sm"
                     variant="ghost"
@@ -359,235 +341,135 @@ export function WorkCard({
                 </div>
               ) : onUnsave ? (
                 <>
-                  {/* Collections View - 显示授权状态和NFT操作 */}
+                  {/* Collections/Saved View - 显示单个授权按钮 */}
                   <div className="flex gap-2">
-                    {/* 授权相关按钮 */}
-                    {(status === "none" || !status) && (
+                    {/* 授权相关按钮 - 根据状态显示不同按钮 */}
+                    {(status === "none" || !status) && canBeRemixed && (
+                      <UniversalPaymentButton
+                        workId={work.id || work.work_id}
+                        creatorAddress={work.creator_address || work.creator || '0x0000000000000000000000000000000000000000'}
+                        creatorName={work.author}
+                        workTitle={work.title}
+                        paymentType="license"
+                        fixedAmount={work.license_fee || work.licenseFee || "0.05"}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-3 bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary"
+                      />
+                    )}
+                    
+                    {(status === "none" || !status) && !canBeRemixed && (
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={!canBeRemixed}
-                        className="h-8 bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={onRemix}
+                        disabled
+                        className="h-8 px-3 bg-transparent border-red-500/30 text-red-500 opacity-70"
+                        title="Remix Not Allowed"
                       >
-                        {canBeRemixed ? (
-                          <>
-                            <GitFork className="w-3.5 h-3.5 mr-1.5" />
-                            Remix
-                          </>
-                        ) : (
-                          <>
-                            <Lock className="w-3.5 h-3.5 mr-1.5" />
-                            No Remix
-                          </>
-                        )}
+                        <Lock className="w-4 h-4 mr-1" />
+                        <span className="text-xs">No Remix</span>
                       </Button>
                     )}
+                    
                     {status === "pending" && (
                       <Button
                         size="sm"
                         variant="outline"
                         disabled
-                        className="h-8 bg-transparent border-primary/30 text-muted-foreground opacity-70"
+                        className="h-8 px-3 bg-transparent border-yellow-500/30 text-yellow-600 opacity-70"
+                        title="Under Review"
                       >
-                        <Clock className="w-3.5 h-3.5 mr-1.5" />
-                        Reviewing
+                        <Clock className="w-4 h-4 mr-1" />
+                        <span className="text-xs">Under Review</span>
                       </Button>
                     )}
+                    
                     {status === "approved" && (
                       <Button
                         size="sm"
                         variant="default"
-                        className="h-8 bg-green-600 hover:bg-green-700 text-white border-none"
+                        className="h-8 px-3 bg-green-600 hover:bg-green-700 text-white border-none"
                         onClick={(e) => {
                           e.stopPropagation()
                           if (onRemix) onRemix()
                         }}
+                        title="Upload your remix work"
                       >
-                        <Upload className="w-3.5 h-3.5 mr-1.5" />
-                        Upload Work
+                        <Upload className="w-4 h-4 mr-1" />
+                        <span className="text-xs">Upload Work</span>
                       </Button>
                     )}
+                    
                     {status === "rejected" && (
-                      <Button size="sm" variant="destructive" className="h-8" onClick={onRemix}>
-                        <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />
-                        Retry
-                      </Button>
-                    )}
-
-                    
-                    {/* Mint to Blockchain Button - for database-only works */}
-                    {(!work.is_on_chain && work.upload_status !== 'minted' && work.upload_status !== 'nft_minted') && (
-                      <MintToBlockchainButton 
-                        work={work}
-                        onMintSuccess={(result) => {
-                          console.log('Mint success:', result)
-                          // Optionally refresh the work data or update UI
+                      <Button 
+                        size="sm" 
+                        variant="destructive" 
+                        className="h-8 px-3" 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (onRemix) onRemix()
                         }}
-                      />
-                    )}
-                    
-                    {/* AI审核按钮 - 始终显示，让用户可以审核任何作品 */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 border-orange-500 text-orange-600 hover:bg-orange-50"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setShowContentModerationModal(true)
-                      }}
-                    >
-                      <Shield className="w-3.5 h-3.5 mr-1.5" />
-                      AI Review
-                    </Button>
-
-                    {/* 新的NFT功能按钮 - 根据用户行为链条 */}
-                    {work.is_on_chain && work.upload_status === 'minted' && (
-                      <>
-                        {/* 铸造NFT按钮 - 当作品已上链但未铸造NFT时显示，且仅创作者可见 */}
-                        {(!nftStatus?.isNFT && work.creator_address?.toLowerCase() === address?.toLowerCase()) && (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="h-8 bg-blue-600 hover:bg-blue-700 text-white"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setShowNewMintModal(true)
-                            }}
-                          >
-                            <Upload className="w-3.5 h-3.5 mr-1.5" />
-                            Mint NFT
-                          </Button>
-                        )}
-                        
-                        {/* 出售按钮 - 当NFT已铸造且用户拥有时显示 */}
-                        {nftStatus?.isNFT && nftStatus?.isOwned && !nftStatus?.isListed && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 border-green-500 text-green-600 hover:bg-green-50"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setShowSellModal(true)
-                            }}
-                          >
-                            <ShoppingCart className="w-3.5 h-3.5 mr-1.5" />
-                            Sell
-                          </Button>
-                        )}
-                        
-                        {/* 已上架显示 */}
-                        {nftStatus?.isListed && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled
-                            className="h-8 opacity-70"
-                          >
-                            <ShoppingCart className="w-3.5 h-3.5 mr-1.5" />
-                            Listed ({nftStatus.price} ETH)
-                          </Button>
-                        )}
-                      </>
-                    )}
-                    
-                    {/* 原有的NFT 操作按钮 */}
-                    {nftStatus && (
-                      <NFTActionButtons
-                        isNFT={nftStatus.isNFT}
-                        isListed={nftStatus.isListed}
-                        isOwned={nftStatus.isOwned}
-                        canMintNFT={!nftStatus.isNFT && onMintNFT !== undefined}
-                        canBuyNFT={nftStatus.isListed && !nftStatus.isOwned && onBuyNFT !== undefined}
-                        canListNFT={nftStatus.isOwned && !nftStatus.isListed && onListNFT !== undefined}
-                        price={nftStatus.price}
-                        onMintNFT={() => setShowMintNFTModal(true)}
-                        onBuyNFT={() => setShowBuyNFTModal(true)}
-                        onListNFT={() => setShowListNFTModal(true)}
-                      />
+                        title="Retry Request"
+                      >
+                        <RefreshCcw className="w-4 h-4 mr-1" />
+                        <span className="text-xs">Retry</span>
+                      </Button>
                     )}
                   </div>
                 </>
               ) : (
-                /* Profile Tab Actions */
+                /* Profile Tab Actions - 显示like数、remix数和mint按钮 */
                 <>
                   <div className="flex gap-2">
-                    {/* 授权按钮 */}
-                    {isRemixable && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={!canBeRemixed}
-                        className="h-8 bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={onRemix}
-                      >
-                        {canBeRemixed ? (
-                          <>
-                            <GitFork className="w-3.5 h-3.5 mr-1.5" />
-                            Remix
-                          </>
-                        ) : (
-                          <>
-                            <Lock className="w-3.5 h-3.5 mr-1.5" />
-                            Locked
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    
-                    {/* AI审核按钮 - 在Profile页面也显示 */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 border-orange-500 text-orange-600 hover:bg-orange-50"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setShowContentModerationModal(true)
-                      }}
-                    >
-                      <Shield className="w-3.5 h-3.5 mr-1.5" />
-                      AI Review
-                    </Button>
-                    
-                    {/* 收藏按钮 */}
-                    {!isRemixable && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-8 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
-                        onClick={() => setShowCollectModal(true)}
-                      >
-                        <Bookmark className="w-3.5 h-3.5 mr-1.5 fill-current" />
-                        Collect
-                      </Button>
-                    )}
-                    
-                    {/* Mint to Blockchain Button - for database-only works */}
-                    {(!work.is_on_chain && work.upload_status !== 'minted' && work.upload_status !== 'nft_minted') && (
-                      <MintToBlockchainButton 
-                        work={work}
-                        onMintSuccess={(result) => {
-                          console.log('Mint success:', result)
-                          // Optionally refresh the work data or update UI
-                        }}
-                      />
-                    )}
-                    
-                    {/* NFT 操作按钮 */}
-                    {nftStatus && (
-                      <NFTActionButtons
-                        isNFT={nftStatus.isNFT}
-                        isListed={nftStatus.isListed}
-                        isOwned={nftStatus.isOwned}
-                        canMintNFT={!nftStatus.isNFT && onMintNFT !== undefined}
-                        canBuyNFT={nftStatus.isListed && !nftStatus.isOwned && onBuyNFT !== undefined}
-                        canListNFT={nftStatus.isOwned && !nftStatus.isListed && onListNFT !== undefined}
-                        price={nftStatus.price}
-                        onMintNFT={() => setShowMintNFTModal(true)}
-                        onBuyNFT={() => setShowBuyNFTModal(true)}
-                        onListNFT={() => setShowListNFTModal(true)}
-                      />
-                    )}
+                    {/* 检查是否过了7天安全期且可以mint */}
+                    {(() => {
+                      const isCreator = work.creator_address?.toLowerCase() === address?.toLowerCase()
+                      
+                      if (!isCreator) return null
+                      
+                      const createdDate = new Date(work.created_at || Date.now())
+                      const now = new Date()
+                      const daysPassed = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24))
+                      const canMint = daysPassed >= 7 && !nftStatus?.isNFT
+                      const isNFTMinted = nftStatus?.isNFT
+                      const isNFTSold = nftStatus?.isListed || !nftStatus?.isOwned
+                      
+                      if (canMint) {
+                        return (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-8 px-3 bg-green-600 hover:bg-green-700 text-white"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setShowNewMintModal(true)
+                            }}
+                            title="Mint NFT"
+                          >
+                            <Upload className="w-4 h-4 mr-1" />
+                            <span className="text-xs">Mint NFT</span>
+                          </Button>
+                        )
+                      } else if (isNFTMinted && !isNFTSold) {
+                        return (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-3 border-green-500 text-green-600 hover:bg-green-50"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setShowSellModal(true)
+                            }}
+                            title="Sell NFT"
+                          >
+                            <ShoppingCart className="w-4 h-4 mr-1" />
+                            <span className="text-xs">Sell NFT</span>
+                          </Button>
+                        )
+                      }
+                      
+                      return null
+                    })()}
                   </div>
                 </>
               )}
@@ -618,6 +500,8 @@ export function WorkCard({
         onListNFT={() => setShowListNFTModal(true)}
         onRemix={onRemix}
         canBeRemixed={canBeRemixed}
+        votingStatus={votingStatus}
+        onLaunchVote={onLaunchVote}
       />
 
       {/* Quick Upload Modal for "Approved" state */}
@@ -1000,7 +884,10 @@ export function WorkDetailDialog({
   onBuyNFT,
   onListNFT,
   onRemix,
-  canBeRemixed = true
+  canBeRemixed = true,
+  votingStatus,
+  onLaunchVote,
+  onContinueCreating
 }: {
   work: any
   open: boolean
@@ -1011,14 +898,19 @@ export function WorkDetailDialog({
   onListNFT?: () => void
   onRemix?: () => void
   canBeRemixed?: boolean
+  votingStatus?: {
+    hasVoting: boolean
+    votingStatus?: 'active' | 'ended' | 'upcoming'
+    votingTitle?: string
+  }
+  onLaunchVote?: () => void
+  onContinueCreating?: (workId: number) => void
 }) {
   const { address } = useAccount()
   // Defensive check at the top of the component
   if (!work) return null
 
-  const [selectedRemixer, setSelectedRemixer] = useState(0)
-  const [derivatives, setDerivatives] = useState<any[]>([])
-  const [loadingDerivatives, setLoadingDerivatives] = useState(false)
+  // Genealogy data is now handled by the CreationGenealogy component
   
   // 点赞相关状态
   const [liked, setLiked] = useState(false)
@@ -1026,7 +918,6 @@ export function WorkDetailDialog({
   
   // 模态框状态
   const [showCollectModal, setShowCollectModal] = useState(false)
-  const [showTipModal, setShowTipModal] = useState(false)
   const [showContentModerationModal, setShowContentModerationModal] = useState(false)
   const [showReportModal, setShowReportModal] = useState(false)
   
@@ -1055,76 +946,6 @@ export function WorkDetailDialog({
       console.error('Failed to toggle like:', error)
     }
   }
-
-  // 加载衍生作品
-  const [genealogy, setGenealogy] = useState<{
-    root: any | null;
-    continuations: any[];
-    derivatives: any[];
-    totalDerivatives: number;
-  }>({
-    root: null,
-    continuations: [],
-    derivatives: [],
-    totalDerivatives: 0
-  })
-
-  useEffect(() => {
-    if (open && work?.work_id && work?.allowRemix) {
-      loadGenealogy()
-    }
-  }, [open, work?.work_id])
-
-  const loadGenealogy = async () => {
-    if (!work?.work_id) return
-    
-    setLoadingDerivatives(true)
-    try {
-      const { getWorkGenealogy } = await import('@/lib/supabase/services/work.service')
-      const genealogyData = await getWorkGenealogy(work.work_id)
-      setGenealogy(genealogyData)
-      // 保持向后兼容
-      setDerivatives([...genealogyData.continuations, ...genealogyData.derivatives])
-    } catch (error) {
-      console.error('Failed to load genealogy:', error)
-    } finally {
-      setLoadingDerivatives(false)
-    }
-  }
-
-  // Ensure safe access to arrays
-  const safeTags = Array.isArray(work.tags) ? work.tags : []
-  const safeImages = Array.isArray(work.images) ? work.images : []
-  
-  // Build genealogy display data
-  const genealogyDisplay = work?.allowRemix
-    ? {
-        root: {
-          id: genealogy.root?.work_id || work.work_id || work.id,
-          title: genealogy.root?.title || work.title || "Untitled",
-          author: genealogy.root?.creator_address || work.creator_address || work.author || "Unknown",
-          date: genealogy.root?.created_at || work.createdAt || new Date().toLocaleDateString(),
-          type: "Original",
-          image: genealogy.root?.image_url || work.images?.[0] || work.image || "/placeholder.svg",
-        },
-        continuations: genealogy.continuations.map((cont: any) => ({
-          id: cont.work_id,
-          title: cont.title,
-          author: cont.creator_address?.slice(0, 6) + '...' + cont.creator_address?.slice(-4),
-          date: new Date(cont.created_at).toLocaleDateString(),
-          type: "Canonical Extension",
-          image: cont.image_url || "/placeholder.svg",
-        })),
-        derivatives: genealogy.derivatives.map((deriv: any) => ({
-          id: deriv.work_id,
-          title: deriv.title,
-          author: deriv.creator_address?.slice(0, 6) + '...' + deriv.creator_address?.slice(-4),
-          date: new Date(deriv.created_at).toLocaleDateString(),
-          type: "Authorized Derivative",
-          image: deriv.image_url || "/placeholder.svg",
-        }))
-      }
-    : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1212,7 +1033,7 @@ export function WorkDetailDialog({
                 <div>
                   <span className="block text-xs font-bold uppercase text-primary/70 mb-1">Keywords</span>
                   <div className="flex flex-wrap gap-1">
-                    {safeTags.map((tag: string) => (
+                    {Array.isArray(work.tags) && work.tags.map((tag: string) => (
                       <span key={tag} className="px-2 py-0.5 bg-primary/10 text-primary rounded text-xs">
                         {tag}
                       </span>
@@ -1234,7 +1055,7 @@ export function WorkDetailDialog({
                     </div>
                     {/* TODO: 显示具体的许可证信息 */}
                     <div className="text-xs text-muted-foreground">
-                      License fee: {work.license_fee || '0'} ETH
+                      License fee: {work.license_fee || work.licenseFee || '0.05'} ETH
                     </div>
                   </div>
                 ) : (
@@ -1251,54 +1072,56 @@ export function WorkDetailDialog({
               </div>
             </div>
 
-            {/* 用户行为按钮 */}
-            <div className="pt-4 border-t border-border/50">
-              <h3 className="font-bold text-lg mb-3">User Actions</h3>
-              <div className="flex flex-wrap gap-3">
-                {/* 点赞按钮 */}
-                <Button
-                  variant="ghost"
-                  className={`${liked ? "text-pink-500" : "text-muted-foreground hover:text-pink-500"} transition-colors`}
-                  onClick={handleLike}
-                >
-                  <Heart className={`w-4 h-4 mr-2 ${liked ? "fill-current" : ""}`} />
-                  Like ({likeCount})
-                </Button>
+            {/* 用户行为按钮 - 在profile页面中隐藏 */}
+            {work.creator_address?.toLowerCase() !== address?.toLowerCase() && (
+              <div className="pt-4 border-t border-border/50">
+                <h3 className="font-bold text-lg mb-3">User Actions</h3>
+                <div className="flex flex-wrap gap-3">
+                  {/* 点赞按钮 */}
+                  <Button
+                    variant="ghost"
+                    className={`${liked ? "text-pink-500" : "text-muted-foreground hover:text-pink-500"} transition-colors`}
+                    onClick={handleLike}
+                  >
+                    <Heart className={`w-4 h-4 mr-2 ${liked ? "fill-current" : ""}`} />
+                    Like ({likeCount})
+                  </Button>
 
-                {/* 收藏按钮 */}
-                <Button
-                  variant="outline"
-                  className="bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary"
-                  onClick={() => setShowCollectModal(true)}
-                >
-                  <Bookmark className="w-4 h-4 mr-2" />
-                  Collect
-                </Button>
-
-                {/* Remix按钮 */}
-                {canBeRemixed && onRemix && (
+                  {/* 收藏按钮 */}
                   <Button
                     variant="outline"
                     className="bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary"
-                    onClick={onRemix}
+                    onClick={() => setShowCollectModal(true)}
                   >
-                    <GitFork className="w-4 h-4 mr-2" />
-                    Request Remix
+                    <Bookmark className="w-4 h-4 mr-2" />
+                    Collect
                   </Button>
-                )}
 
-                {/* Tip按钮 */}
-                <Button
-                  variant="outline"
-                  className="bg-transparent border-yellow-500/30 hover:border-yellow-500/60 hover:bg-yellow-50 text-yellow-600"
-                  onClick={() => setShowTipModal(true)}
-                >
-                  <Coins className="w-4 h-4 mr-2" />
-                  Tip Creator
-                </Button>
+                  {/* Remix按钮 */}
+                  {canBeRemixed && onRemix && (
+                    <Button
+                      variant="outline"
+                      className="bg-transparent border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary"
+                      onClick={onRemix}
+                    >
+                      <GitFork className="w-4 h-4 mr-2" />
+                      Request Remix
+                    </Button>
+                  )}
 
-                {/* 举报按钮 - 不能举报自己的作品 */}
-                {work.creator_address?.toLowerCase() !== address?.toLowerCase() && (
+                  {/* Tip按钮 - 使用通用支付按钮 */}
+                  <UniversalPaymentButton
+                    workId={work.id || work.work_id}
+                    creatorAddress={work.creator_address || work.creator || '0x0000000000000000000000000000000000000000'}
+                    creatorName={work.author}
+                    workTitle={work.title}
+                    paymentType="tip"
+                    size="sm"
+                    variant="outline"
+                    className="bg-transparent border-yellow-500/30 hover:border-yellow-500/60 hover:bg-yellow-50 text-yellow-600"
+                  />
+
+                  {/* 举报按钮 - 不能举报自己的作品 */}
                   <Button
                     variant="outline"
                     className="bg-transparent border-red-500/30 hover:border-red-500/60 hover:bg-red-50 text-red-600"
@@ -1307,61 +1130,175 @@ export function WorkDetailDialog({
                     <Flag className="w-4 h-4 mr-2" />
                     Report
                   </Button>
-                )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* 作者行为按钮 - 只有作者才能看到 */}
-            {work.creator_address?.toLowerCase() === address?.toLowerCase() && (
+            {(() => {
+              const isCreator = work.creator_address?.toLowerCase() === address?.toLowerCase()
+              console.log('Creator check:', { 
+                workCreator: work.creator_address, 
+                currentAddress: address, 
+                isCreator 
+              })
+              return isCreator
+            })() && (
               <div className="pt-4 border-t border-border/50">
                 <h3 className="font-bold text-lg mb-3">Creator Actions</h3>
-                <div className="flex flex-wrap gap-3">
-                  {/* AI内容审核按钮 */}
-                  <Button
-                    variant="outline"
-                    className="border-orange-500 text-orange-600 hover:bg-orange-50"
-                    onClick={() => setShowContentModerationModal(true)}
-                  >
-                    <Shield className="w-4 h-4 mr-2" />
-                    AI Content Review
-                  </Button>
+                <div className="space-y-4">
+                  {/* NFT Status Card */}
+                  <Card className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h4 className="font-semibold flex items-center gap-2">
+                            <Shield className="w-4 h-4 text-blue-600" />
+                            NFT Status
+                          </h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Security deposit: 0.00001 ETH
+                          </p>
+                        </div>
+                        {nftStatus && <NFTStatusBadge status={nftStatus} />}
+                      </div>
 
-                  {/* NFT相关按钮 */}
-                  {nftStatus && (
-                    <>
-                      {!nftStatus.isNFT && onMintNFT && (
-                        <Button
-                          variant="default"
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                          onClick={onMintNFT}
-                        >
-                          <Upload className="w-4 h-4 mr-2" />
-                          Mint as NFT
-                        </Button>
-                      )}
-                      
-                      {nftStatus.isOwned && !nftStatus.isListed && onListNFT && (
-                        <Button
-                          variant="outline"
-                          className="border-green-500 text-green-600 hover:bg-green-50"
-                          onClick={onListNFT}
-                        >
-                          <ShoppingCart className="w-4 h-4 mr-2" />
-                          List for Sale
-                        </Button>
-                      )}
-                    </>
-                  )}
+                      {/* 7天等待期显示 */}
+                      {work.created_at && (() => {
+                        const createdDate = new Date(work.created_at)
+                        const now = new Date()
+                        const daysPassed = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24))
+                        const daysRemaining = Math.max(0, 7 - daysPassed)
+                        const canMint = daysPassed >= 7 && !nftStatus?.isNFT
 
-                  {/* Mint to Blockchain按钮 */}
-                  {(!work.is_on_chain && work.upload_status !== 'minted' && work.upload_status !== 'nft_minted') && (
-                    <MintToBlockchainButton 
-                      work={work}
-                      onMintSuccess={(result) => {
-                        console.log('Mint success:', result)
+                        return (
+                          <div className="space-y-3">
+                            {daysRemaining > 0 ? (
+                              <>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">Waiting period:</span>
+                                  <span className="font-medium">{daysRemaining} days remaining</span>
+                                </div>
+                                <Progress value={(daysPassed / 7) * 100} className="h-2" />
+                                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                  <p className="text-xs text-yellow-700">
+                                    ⏳ Your work is in the 7-day security period. If no valid copyright disputes are filed, you can mint it as an NFT.
+                                  </p>
+                                </div>
+                              </>
+                            ) : canMint ? (
+                              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                <p className="text-xs text-green-700 mb-2">
+                                  ✅ Security period complete! You can now mint your work as an NFT.
+                                </p>
+                                {onMintNFT && (
+                                  <Button
+                                    variant="default"
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                    onClick={onMintNFT}
+                                  >
+                                    <Upload className="w-4 h-4 mr-2" />
+                                    Mint as NFT
+                                  </Button>
+                                )}
+                              </div>
+                            ) : nftStatus?.isNFT ? (
+                              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                                <p className="text-xs text-blue-700">
+                                  ✨ This work has been minted as an NFT!
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })()}
+                    </CardContent>
+                  </Card>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap gap-3">
+                    {/* 继续创作按钮 - 允许作者直接对自己的作品创作衍生作品 */}
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                      onClick={() => {
+                        if (onContinueCreating) {
+                          onContinueCreating(work.id || work.work_id)
+                        }
                       }}
-                    />
-                  )}
+                    >
+                      <GitFork className="w-4 h-4 mr-2" />
+                      Continue Creating
+                    </Button>
+
+                    {/* NFT相关按钮 */}
+                    {nftStatus && (
+                      <>
+                        {nftStatus.isOwned && !nftStatus.isListed && onListNFT && (
+                          <Button
+                            variant="outline"
+                            className="border-green-500 text-green-600 hover:bg-green-50"
+                            onClick={onListNFT}
+                          >
+                            <ShoppingCart className="w-4 h-4 mr-2" />
+                            List for Sale
+                          </Button>
+                        )}
+                      </>
+                    )}
+
+                    {/* Launch Vote按钮 */}
+                    {(() => {
+                      const isCreator = work.creator_address?.toLowerCase() === address?.toLowerCase()
+                      if (!isCreator) return null
+
+                      // 如果没有传递votingStatus或者没有投票，显示Launch Vote按钮
+                      if (!votingStatus || !votingStatus.hasVoting) {
+                        return (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (onLaunchVote) onLaunchVote()
+                            }}
+                            className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/30"
+                          >
+                            <Vote className="w-4 h-4 mr-2" />
+                            Launch Vote
+                          </Button>
+                        )
+                      } else if (votingStatus.votingStatus === 'active') {
+                        return (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            className="bg-green-500/10 border-green-500 text-green-600 cursor-default"
+                            title={`投票进行中: ${votingStatus.votingTitle}`}
+                          >
+                            <Vote className="w-4 h-4 mr-2" />
+                            Voting Active
+                          </Button>
+                        )
+                      } else if (votingStatus.votingStatus === 'ended') {
+                        return (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            className="bg-gray-500/10 border-gray-500 text-gray-600 cursor-default"
+                            title={`投票已结束: ${votingStatus.votingTitle}`}
+                          >
+                            <Vote className="w-4 h-4 mr-2" />
+                            Vote Ended
+                          </Button>
+                        )
+                      }
+                      return null
+                    })()}
+                  </div>
                 </div>
               </div>
             )}
@@ -1407,166 +1344,12 @@ export function WorkDetailDialog({
             />
 
             {/* Genealogy Section */}
+            {/* Creation Chain - 新的创作链组件 */}
             <div className="pt-6 border-t border-border/50">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <GitFork className="w-4 h-4" /> Creation Genealogy
-              </h3>
-
-              {!work.allowRemix ? (
-                <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-                  <Lock className="w-6 h-6 mx-auto mb-2 text-red-500" />
-                  <p className="text-sm font-medium text-red-500 text-center">Remixing disabled by creator</p>
-                  <p className="text-xs text-muted-foreground mt-2 text-center">
-                    This work cannot be used as a source for new creations.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {loadingDerivatives ? (
-                    <div className="text-center py-4 text-muted-foreground text-sm">
-                      Loading genealogy...
-                    </div>
-                  ) : (
-                    <>
-                      {/* Root Work */}
-                      {genealogyDisplay && (
-                        <div className="space-y-4">
-                          <div className="relative pl-4 border-l-2 border-primary/20">
-                            <div className="absolute -left-[21px] top-2 w-3 h-3 rounded-full bg-primary ring-4 ring-background" />
-                            <div className="flex items-start gap-3 bg-primary/5 p-3 rounded-lg border border-primary/20">
-                              <div className="w-12 h-12 rounded bg-muted overflow-hidden shrink-0">
-                                <img
-                                  src={genealogyDisplay.root.image || "/placeholder.svg"}
-                                  className="w-full h-full object-cover"
-                                  alt={genealogyDisplay.root.title}
-                                />
-                              </div>
-                              <div>
-                                <p className="text-xs font-bold uppercase text-primary mb-0.5">{genealogyDisplay.root.type}</p>
-                                <p className="font-medium text-sm">{genealogyDisplay.root.title}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  by {genealogyDisplay.root.author} • {genealogyDisplay.root.date}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Official Continuations */}
-                          {genealogyDisplay.continuations.length > 0 && (
-                            <div className="space-y-3">
-                              <h4 className="text-sm font-bold text-purple-600 flex items-center gap-2">
-                                🟣 Official Continuations (by original creator)
-                              </h4>
-                              <div className="relative pl-4 border-l-2 border-purple-200 space-y-3">
-                                {genealogyDisplay.continuations.map((node: any, i: number) => (
-                                  <div key={node.id} className="relative">
-                                    <div className="absolute -left-[21px] top-2 w-3 h-3 rounded-full bg-purple-500 ring-4 ring-background" />
-                                    <div className="flex items-start gap-3 bg-purple-50 p-3 rounded-lg border border-purple-200">
-                                      <div className="w-12 h-12 rounded bg-muted overflow-hidden shrink-0">
-                                        <img
-                                          src={node.image || "/placeholder.svg"}
-                                          className="w-full h-full object-cover"
-                                          alt={node.title}
-                                        />
-                                      </div>
-                                      <div>
-                                        <p className="text-xs font-bold uppercase text-purple-600 mb-0.5">{node.type}</p>
-                                        <p className="font-medium text-sm">{node.title}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          by {node.author} • {node.date}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Community Derivatives */}
-                          {genealogyDisplay.derivatives.length > 0 && (
-                            <div className="space-y-3">
-                              <h4 className="text-sm font-bold text-blue-600 flex items-center gap-2">
-                                🔵 Community Derivatives
-                              </h4>
-                              <div className="relative pl-4 border-l-2 border-blue-200 space-y-3">
-                                {genealogyDisplay.derivatives.map((node: any, i: number) => (
-                                  <div key={node.id} className="relative">
-                                    <div className="absolute -left-[21px] top-2 w-3 h-3 rounded-full bg-blue-500 ring-4 ring-background" />
-                                    <div className="flex items-start gap-3 bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                      <div className="w-12 h-12 rounded bg-muted overflow-hidden shrink-0">
-                                        <img
-                                          src={node.image || "/placeholder.svg"}
-                                          className="w-full h-full object-cover"
-                                          alt={node.title}
-                                        />
-                                      </div>
-                                      <div>
-                                        <p className="text-xs font-bold uppercase text-blue-600 mb-0.5">{node.type}</p>
-                                        <p className="font-medium text-sm">{node.title}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          by {node.author} • {node.date}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Statistics */}
-                          <div className="pt-4 border-t border-border/30">
-                            <h4 className="text-sm font-bold mb-3">Creation Statistics</h4>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                                <div className="text-sm">
-                                  <span className="text-purple-700 font-medium">Official continuations:</span>
-                                  <span className="ml-2 font-bold text-purple-600">{genealogy.continuations.length}</span>
-                                </div>
-                              </div>
-                              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <div className="text-sm">
-                                  <span className="text-blue-700 font-medium">Community derivatives:</span>
-                                  <span className="ml-2 font-bold text-blue-600">{genealogy.derivatives.length}</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-3 p-3 bg-primary/5 rounded-lg border border-primary/10">
-                              <div className="text-sm">
-                                <span className="text-foreground font-medium">Total derivatives:</span>
-                                <span className="ml-2 font-bold text-primary">{genealogy.totalDerivatives}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Recent Derivatives Preview */}
-                          {(genealogy.continuations.length > 0 || genealogy.derivatives.length > 0) && (
-                            <div className="mt-4">
-                              <p className="text-xs font-bold uppercase text-muted-foreground mb-2">Recent Creations</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                {[...genealogy.continuations, ...genealogy.derivatives].slice(0, 4).map((item: any) => (
-                                  <div key={item.work_id} className="p-2 bg-muted/30 rounded-lg border border-border/50">
-                                    <img
-                                      src={item.image_url || "/placeholder.svg"}
-                                      className="w-full h-20 object-cover rounded mb-2"
-                                      alt={item.title}
-                                    />
-                                    <p className="text-xs font-medium truncate">{item.title}</p>
-                                    <p className="text-[10px] text-muted-foreground truncate">
-                                      by {item.creator_address?.slice(0, 6)}...{item.creator_address?.slice(-4)}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
+              <CreationGenealogy 
+                workId={work.work_id || work.id} 
+                workTitle={work.title}
+              />
             </div>
           </div>
         </div>
@@ -1585,11 +1368,18 @@ export function WorkDetailDialog({
         }}
       />
       
-      <TipModal 
-        open={showTipModal} 
-        onOpenChange={setShowTipModal} 
-        work={work} 
+      {/* TODO: Re-enable when disk space is available
+      <MultiChainPaymentModal
+        isOpen={showMultiChainPaymentModal}
+        onClose={() => setShowMultiChainPaymentModal(false)}
+        recipientAddress={work.creator_address || work.creator || '0x0000000000000000000000000000000000000000'}
+        recipientName={work.author}
+        workId={work.id || work.work_id}
+        workTitle={work.title}
+        paymentType="license"
+        amount={work.license_fee || "0.01"}
       />
+      */}
       
       <ContentModerationModal
         open={showContentModerationModal}
