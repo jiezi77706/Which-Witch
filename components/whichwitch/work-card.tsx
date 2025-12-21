@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils"
 import { processPayment } from "@/lib/web3/services/contract.service"
 import { toggleLike } from "@/lib/supabase/services/like.service"
 import { Progress } from "@/components/ui/progress"
+import LicenseDeclarationLink from "./license-declaration-link"
 
 export function WorkCard({
   work,
@@ -1069,6 +1070,18 @@ export function WorkDetailDialog({
                     </div>
                   </div>
                 )}
+                
+                {/* 授权声明链接 */}
+                <LicenseDeclarationLink
+                  workId={work.work_id || work.id}
+                  workTitle={work.title}
+                  workType={work.type || work.category || 'Artwork'}
+                  authorName={work.author}
+                  walletAddress={work.creator_address || work.creator || '0x0000000000000000000000000000000000000000'}
+                  currentUserWallet={address}
+                  licenseType={work.license_type || (work.allowRemix ? 'CC_BY_NC' : 'ALL_RIGHTS_RESERVED')}
+                  className="mt-3"
+                />
               </div>
             </div>
 

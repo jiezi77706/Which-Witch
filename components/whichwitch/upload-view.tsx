@@ -20,6 +20,7 @@ import { useUser } from "@/lib/hooks/useUser"
 import { AIAdvisorButton } from "./ai-advisor/ai-advisor-button"
 import { LicenseSelectorButton } from "./license-selector-button"
 import type { LicenseSelection } from "./license-selector-modal"
+import LicenseTypeSelector from "./license-type-selector"
 
 export function UploadView({ 
   onAddWork,
@@ -52,6 +53,9 @@ export function UploadView({
   
   // License selection
   const [licenseSelection, setLicenseSelection] = useState<LicenseSelection | null>(null)
+  
+  // 授权类型选择
+  const [licenseType, setLicenseType] = useState<string>('ALL_RIGHTS_RESERVED')
   
   // Form data
   const [formData, setFormData] = useState({
@@ -138,6 +142,7 @@ export function UploadView({
         tags: tags,
         allowRemix: allowRemix,
         licenseFee: formData.licenseFee,
+        licenseType: licenseType, // 添加授权类型
         isRemix: mode === "remix",
         parentWorkId: mode === "remix" ? selectedParentWork : undefined,
         licenseSelection: licenseSelection,
@@ -614,7 +619,13 @@ export function UploadView({
             </div>
           </div>
 
-
+          {/* 授权类型选择器 */}
+          <div className="space-y-4">
+            <LicenseTypeSelector
+              value={licenseType}
+              onChange={setLicenseType}
+            />
+          </div>
 
           {/* Security Deposit Agreement */}
           <div className="space-y-4 p-4 border rounded-lg bg-orange-500/5 border-orange-500/20">
