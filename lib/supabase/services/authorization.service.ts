@@ -75,6 +75,8 @@ export async function updateAuthorizationStatus(
   txHash?: string,
   errorMessage?: string
 ): Promise<AuthorizationRequest> {
+  console.log('🔍 updateAuthorizationStatus called with:', { userAddress, workId, status, txHash });
+  
   try {
     // 先查询最新的授权请求
     const { data: latestRequest, error: queryError } = await supabase
@@ -87,6 +89,7 @@ export async function updateAuthorizationStatus(
       .single();
 
     if (queryError) {
+      console.log('🔍 No existing request found, creating new one:', queryError.code);
       // 如果没有找到记录，创建一个新的
       if (queryError.code === 'PGRST116') {
         const { data: newData, error: insertError } = await supabase
@@ -102,11 +105,13 @@ export async function updateAuthorizationStatus(
           .single();
 
         if (insertError) throw insertError;
+        console.log('🔍 Created new authorization request:', newData);
         return newData;
       }
       throw queryError;
     }
 
+    console.log('🔍 Found existing request, updating:', latestRequest.id);
     // 更新找到的记录
     const { data, error } = await supabase
       .from('authorization_requests')
@@ -121,6 +126,7 @@ export async function updateAuthorizationStatus(
       .single();
 
     if (error) throw error;
+    console.log('🔍 Updated authorization request:', data);
     return data;
   } catch (error) {
     console.error('Error updating authorization status:', error);
@@ -159,6 +165,8 @@ export async function getUserCollectionAuthStatuses(
 ): Promise<Record<number, AuthorizationStatus | 'none'>> {
   if (workIds.length === 0) return {};
 
+  console.log('🔍 getUserCollectionAuthStatuses called with:', { userAddress, workIds });
+
   try {
     const { data, error } = await supabase
       .from('authorization_requests')
@@ -168,6 +176,8 @@ export async function getUserCollectionAuthStatuses(
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+
+    console.log('🔍 Raw authorization_requests data:', data);
 
     // 创建状态映射
     const statusMap: Record<number, AuthorizationStatus | 'none'> = {};
@@ -188,6 +198,7 @@ export async function getUserCollectionAuthStatuses(
       });
     }
 
+    console.log('🔍 Final statusMap:', statusMap);
     return statusMap;
   } catch (error) {
     console.error('Error fetching collection auth statuses:', error);

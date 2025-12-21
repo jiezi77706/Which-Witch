@@ -142,8 +142,7 @@ export async function GET(request: NextRequest) {
           description,
           vote_count,
           percentage,
-          sort_order,
-          image_url
+          sort_order
         )
       `)
       .order('created_at', { ascending: false })

@@ -21,14 +21,18 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
-    return <>{children}</>;
-  }
-
+  // 始终提供 WagmiProvider，即使在 SSR 期间
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        {children}
+        {mounted ? children : (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-2 text-muted-foreground">Loading...</p>
+            </div>
+          </div>
+        )}
       </QueryClientProvider>
     </WagmiProvider>
   );

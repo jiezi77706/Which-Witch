@@ -44,8 +44,10 @@ export function useCollections(userId?: number) {
 
       // 获取所有收藏作品的授权状态
       const workIds = collectionsData.map((c: any) => c.work_id);
+      console.log('🔍 Loading auth statuses for workIds:', workIds);
       if (workIds.length > 0) {
         const statuses = await getUserCollectionAuthStatuses(address, workIds);
+        console.log('🔍 Received auth statuses:', statuses);
         setAuthStatuses(statuses);
       }
     } catch (err) {

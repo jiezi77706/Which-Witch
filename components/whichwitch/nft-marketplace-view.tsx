@@ -24,7 +24,7 @@ export function NFTMarketplaceView() {
     author: work.creator_address.slice(0, 6) + '...' + work.creator_address.slice(-4),
     image: work.image_url,
     tags: work.tags || [],
-    material: work.material?.join(', ') || '',
+    material: Array.isArray(work.material) ? work.material.join(', ') : (work.material || ''),
     likes: work.like_count || 0,
     remixCount: work.remix_count || 0,
     allowRemix: work.allow_remix,

@@ -59,7 +59,6 @@ export function useMarketplaceNFTs(filters?: {
       
       setNfts(data);
     } catch (err) {
-      setError(err as Error);
       console.error('Error loading marketplace NFTs:', err);
       
       // 如果数据库查询失败，使用mock数据作为fallback
@@ -73,10 +72,10 @@ export function useMarketplaceNFTs(filters?: {
           currency: "ETH",
           listing_type: "fixed_price",
           listed_at: new Date().toISOString(),
-          title: "Digital Sculpture #1",
+          title: "Pink Hair Anime Girl",
           creator_address: "0x1234567890123456789012345678901234567890",
-          image_url: "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=400",
-          tags: ["Digital", "Sculpture", "Abstract"],
+          image_url: "/img_9046.jpg",
+          tags: ["Digital", "Anime", "Portrait"],
           material: ["Digital"],
           like_count: 42,
           remix_count: 3,
@@ -85,7 +84,7 @@ export function useMarketplaceNFTs(filters?: {
           nft_total_volume: "0",
           allow_remix: true,
           is_remix: false,
-          story: "A unique digital sculpture exploring the boundaries of virtual art.",
+          story: "A beautiful anime-style portrait with vibrant pink hair and expressive eyes.",
           listing_status: "fixed_price",
           active_offers_count: 0
         },
@@ -98,11 +97,11 @@ export function useMarketplaceNFTs(filters?: {
           currency: "ETH",
           listing_type: "fixed_price",
           listed_at: new Date().toISOString(),
-          title: "Cyberpunk Vision",
+          title: "Cat Ear Character",
           creator_address: "0x2345678901234567890123456789012345678901",
-          image_url: "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400",
-          tags: ["Cyberpunk", "Digital", "Neon"],
-          material: ["Digital", "Glass"],
+          image_url: "/img_9045.jpg",
+          tags: ["Anime", "Character", "Cat"],
+          material: ["Digital"],
           like_count: 28,
           remix_count: 1,
           view_count: 89,
@@ -110,7 +109,7 @@ export function useMarketplaceNFTs(filters?: {
           nft_total_volume: "0",
           allow_remix: false,
           is_remix: false,
-          story: "A futuristic vision of digital art in the cyberpunk aesthetic.",
+          story: "An adorable character design featuring cat ears and expressive anime styling.",
           listing_status: "fixed_price",
           active_offers_count: 0
         },
@@ -123,11 +122,11 @@ export function useMarketplaceNFTs(filters?: {
           currency: "ETH",
           listing_type: "fixed_price",
           listed_at: new Date().toISOString(),
-          title: "Nature's Harmony",
+          title: "Magical Portrait",
           creator_address: "0x3456789012345678901234567890123456789012",
-          image_url: "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400",
-          tags: ["Nature", "Minimalist", "Wood"],
-          material: ["Wood", "Metal"],
+          image_url: "/IMG_88DDEB20DB06-1.jpeg",
+          tags: ["Anime", "Magic", "Portrait"],
+          material: ["Digital"],
           like_count: 67,
           remix_count: 5,
           view_count: 234,
@@ -135,13 +134,40 @@ export function useMarketplaceNFTs(filters?: {
           nft_total_volume: "0",
           allow_remix: true,
           is_remix: false,
-          story: "An exploration of natural forms through digital interpretation.",
+          story: "A mystical anime portrait with magical elements and ethereal beauty.",
+          listing_status: "fixed_price",
+          active_offers_count: 0
+        },
+        {
+          listing_id: 4,
+          work_id: 4,
+          token_id: 1004,
+          seller_address: "0x4567890123456789012345678901234567890123",
+          price: "0.8",
+          currency: "ETH",
+          listing_type: "fixed_price",
+          listed_at: new Date().toISOString(),
+          title: "Magical Girl Portrait",
+          creator_address: "0x4567890123456789012345678901234567890123",
+          image_url: "/IMG_F4DF4C7DEC0F-1.jpeg",
+          tags: ["Anime", "Magical Girl", "Fantasy"],
+          material: ["Digital"],
+          like_count: 35,
+          remix_count: 2,
+          view_count: 128,
+          nft_sales_count: 0,
+          nft_total_volume: "0",
+          allow_remix: true,
+          is_remix: false,
+          story: "A stunning magical girl character with intricate details and vibrant colors.",
           listing_status: "fixed_price",
           active_offers_count: 0
         }
       ];
       
       setNfts(mockNFTs);
+      // 使用mock数据时不设置错误状态
+      setError(null);
     } finally {
       setLoading(false);
     }

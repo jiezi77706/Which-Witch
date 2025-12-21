@@ -4,13 +4,14 @@ import { useState } from "react"
 import { AuthView } from "./auth-view"
 import { UploadView } from "./upload-view"
 import { SquareView } from "./square-view"
+import { CommunityView } from "./community-view"
 import { MarketplaceView } from "./marketplace-view"
 import { CollectionsView } from "./collections-view"
 import { ProfileView } from "./profile-view"
 import { UploadResultPage } from "./upload-result-page"
 import { BlockchainUploadProgress } from "./blockchain-upload-progress"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
-import { Upload, Grid, Bookmark, User, ShoppingCart } from "lucide-react"
+import { Upload, Grid, Bookmark, User, ShoppingCart, Users } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import { works as initialWorks } from "@/lib/mock-data"
@@ -105,6 +106,7 @@ export function WhichwitchApp() {
 
   // 显示上传结果页面
   if (showUploadResult && uploadWorkData) {
+    console.log('🎯 Rendering UploadResultPage with:', { showUploadResult, uploadWorkData });
     return (
       <UploadResultPage
         workData={uploadWorkData}
@@ -146,6 +148,12 @@ export function WhichwitchApp() {
             onClick={() => setActiveTab("square")}
             icon={Grid}
             label="Square"
+          />
+          <DesktopNavButton
+            active={activeTab === "community"}
+            onClick={() => setActiveTab("community")}
+            icon={Users}
+            label="Community"
           />
           <DesktopNavButton
             active={activeTab === "marketplace"}
@@ -208,6 +216,9 @@ export function WhichwitchApp() {
                   onCreateFolder={handleCreateFolder}
                 />
               </TabsContent>
+              <TabsContent value="community" className="mt-0">
+                <CommunityView />
+              </TabsContent>
               <TabsContent value="marketplace" className="mt-0">
                 <MarketplaceView />
               </TabsContent>
@@ -221,19 +232,29 @@ export function WhichwitchApp() {
                     setActiveTab("upload")
                   }}
                   onUploadWork={(workData) => {
+                    console.log('🎯 onUploadWork called with workData:', workData);
                     // 触发上传结果页面
-                    setUploadWorkData({
+                    const uploadData = {
                       id: workData.id,
                       title: workData.title || 'Remix Work',
                       image: workData.image || '/placeholder.svg',
                       creator: user?.did || 'Unknown'
-                    })
-                    setShowUploadResult(true)
+                    };
+                    console.log('🎯 Setting uploadWorkData:', uploadData);
+                    setUploadWorkData(uploadData);
+                    console.log('🎯 Setting showUploadResult to true');
+                    setShowUploadResult(true);
                   }}
                 />
               </TabsContent>
               <TabsContent value="profile" className="mt-0">
-                <ProfileView user={user} />
+                <ProfileView 
+                  user={user} 
+                  onContinueCreating={(workId) => {
+                    setPreselectedParentWork(workId)
+                    setActiveTab("upload")
+                  }}
+                />
               </TabsContent>
             </motion.div>
           </AnimatePresence>
@@ -248,6 +269,12 @@ export function WhichwitchApp() {
             onClick={() => setActiveTab("square")}
             icon={Grid}
             label="Square"
+          />
+          <NavButton
+            active={activeTab === "community"}
+            onClick={() => setActiveTab("community")}
+            icon={Users}
+            label="Community"
           />
           <NavButton
             active={activeTab === "marketplace"}

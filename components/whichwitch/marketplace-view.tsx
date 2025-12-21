@@ -76,7 +76,7 @@ export function MarketplaceView() {
       nft.title.toLowerCase().includes(search.toLowerCase()) ||
       nft.author.toLowerCase().includes(search.toLowerCase()) ||
       nft.tags.some((t: string) => t.toLowerCase().includes(search.toLowerCase())) ||
-      nft.material?.toLowerCase().includes(search.toLowerCase())
+      (Array.isArray(nft.material) ? nft.material.join(' ') : (nft.material || '')).toLowerCase().includes(search.toLowerCase())
 
     // 价格过滤
     const price = parseFloat(nft.price || "0")

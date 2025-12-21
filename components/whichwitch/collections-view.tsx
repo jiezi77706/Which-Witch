@@ -45,7 +45,8 @@ export function CollectionsView({
     authStatuses, 
     loading,
     addFolder,
-    removeCollection 
+    removeCollection,
+    refetch: refetchCollections // 添加refetch方法
   } = useCollections(user?.id)
 
   // 获取收藏作品的NFT状态
@@ -58,6 +59,7 @@ export function CollectionsView({
   const [selectedWork, setSelectedWork] = useState<any>(null)
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [paymentError, setPaymentError] = useState("")
+  const [derivativeType, setDerivativeType] = useState("new-story")
   
   const { address } = useAccount()
 
@@ -72,6 +74,8 @@ export function CollectionsView({
     console.log('🔍 Collection work data:', {
       work_id: work.work_id,
       title: work.title,
+      status: status,
+      authStatuses_for_this_work: authStatuses[work.work_id],
       is_remix: work.is_remix,
       parent_work_id: work.parent_work_id,
       like_count: work.like_count,
@@ -85,7 +89,7 @@ export function CollectionsView({
       author: work.creator_address.slice(0, 6) + '...' + work.creator_address.slice(-4),
       image: work.image_url,
       tags: work.tags || [],
-      material: work.material?.join(', ') || '',
+      material: Array.isArray(work.material) ? work.material.join(', ') : (work.material || ''),
       likes: work.like_count || 0,
       remixCount: work.remix_count || work.total_derivatives || 0,
       allowRemix: work.allow_remix,
@@ -145,8 +149,20 @@ export function CollectionsView({
       console.log("Authorization granted successfully!")
       setRemixModalOpen(false)
       
-      // 刷新数据
-      window.location.reload() // 简单的刷新，实际应该调用 refetch
+      // 刷新数据并等待完成
+      console.log("Refreshing collections data...")
+      try {
+        await refetchCollections()
+        console.log("Collections data refreshed!")
+        
+        // 等待一小段时间确保状态更新完成
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log("🔍 Current authStatuses after refresh:", authStatuses);
+        console.log("🔍 Selected work status:", authStatuses[selectedWork.id]);
+      } catch (refreshError) {
+        console.error("Failed to refresh collections:", refreshError);
+      }
       
     } catch (error: any) {
       console.error("Authorization failed:", error)
@@ -201,22 +217,32 @@ export function CollectionsView({
   }
 
   const handleRemixClick = (work: any) => {
+    console.log('🎯 handleRemixClick called with work:', work);
+    console.log('🎯 work.collectionStatus:', work.collectionStatus);
+    console.log('🎯 work.allowRemix:', work.allowRemix);
+    
     if (!work.allowRemix) {
       return // Button should be disabled, but just in case
     }
     if (work.collectionStatus === "approved") {
+      console.log('✅ Status is approved, calling onUploadWork...');
       // 触发上传结果页面而不是切换到Create tab
       if (onUploadWork) {
+        console.log('✅ onUploadWork callback exists, calling it...');
         onUploadWork({
           id: work.id,
           title: work.title,
-          image: work.images?.[0] || work.image
+          image: work.image // 使用正确的字段名
         })
       } else if (onUploadRemix) {
+        console.log('⚠️ onUploadWork not available, using onUploadRemix...');
         // 备用方案：切换到 Create tab
         onUploadRemix(work.id)
+      } else {
+        console.error('❌ Neither onUploadWork nor onUploadRemix callbacks are available!');
       }
     } else {
+      console.log('⏳ Status is not approved, opening remix modal...');
       setSelectedWork(work)
       setRemixModalOpen(true)
     }
@@ -312,7 +338,7 @@ export function CollectionsView({
       <Dialog open={remixModalOpen} onOpenChange={setRemixModalOpen}>
         <DialogContent className="max-w-sm sm:max-w-md bg-background/95 backdrop-blur-xl border-primary/20">
           <DialogHeader>
-            <DialogTitle>Apply for Remix License</DialogTitle>
+            <DialogTitle>Apply for Derivative License</DialogTitle>
             <DialogDescription>Create a derivative work based on "{selectedWork?.title}".</DialogDescription>
           </DialogHeader>
 
@@ -335,15 +361,18 @@ export function CollectionsView({
             </div>
 
             <div className="space-y-3">
-              <Label>Remix Type</Label>
-              <Select defaultValue="reprocess">
+              <Label>Derivative Type</Label>
+              <Select value={derivativeType} onValueChange={setDerivativeType}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="reprocess">Reprocess (New Material)</SelectItem>
-                  <SelectItem value="remake">Remake (Visual Interpretation)</SelectItem>
-                  <SelectItem value="mix">Mix (Combined with other works)</SelectItem>
+                  <SelectItem value="new-story">New Storyline (新故事线)</SelectItem>
+                  <SelectItem value="new-skin">New Skin/Design (新皮肤)</SelectItem>
+                  <SelectItem value="fanart">Fan Art (同人创作)</SelectItem>
+                  <SelectItem value="crossover">Crossover (联动)</SelectItem>
+                  <SelectItem value="au">Alternative Universe (平行世界)</SelectItem>
+                  <SelectItem value="prequel">Prequel/Sequel (前传/续集)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -369,7 +398,7 @@ export function CollectionsView({
               onClick={handlePayAndMint}
             >
               <GitFork className="w-4 h-4 mr-2" /> 
-              {paymentLoading ? "Processing..." : "Pay & Mint License"}
+              {paymentLoading ? "Processing..." : "Pay & Get License"}
             </Button>
             {paymentError && (
               <p className="text-red-500 text-sm mt-2">{paymentError}</p>

@@ -141,7 +141,10 @@ export function BlockchainUploadProgress({ uploadData, onComplete, onCancel }: B
         const moderationData = await moderationResponse.json()
         setAiReviewResult(moderationData)
         
-        if (moderationData.status === 'rejected') {
+        // 检查实际的审核状态（在result对象中）
+        const actualStatus = moderationData.result?.status || moderationData.status
+        
+        if (actualStatus === 'rejected' || actualStatus === 'unsafe') {
           throw new Error(`内容审核未通过: ${moderationData.message || '内容可能包含不当信息'}`)
         }
 
@@ -221,10 +224,7 @@ export function BlockchainUploadProgress({ uploadData, onComplete, onCancel }: B
       setCurrentStep('上传完成！')
       setIsCompleted(true)
       
-      // 自动跳转到广场，不显示结果页面
-      setTimeout(() => {
-        onComplete(null) // 传递null表示直接跳转广场
-      }, 2000)
+      // 移除自动跳转，让用户手动关闭
 
     } catch (error) {
       console.error('❌ 上传失败:', error)
@@ -413,26 +413,31 @@ export function BlockchainUploadProgress({ uploadData, onComplete, onCancel }: B
               {/* AI审核结果 */}
               {aiReviewResult && (
                 <div className={`p-3 border rounded-lg text-left ${
-                  aiReviewResult.status === 'approved' 
+                  (aiReviewResult.result?.status === 'safe' || aiReviewResult.status === 'approved')
                     ? 'bg-green-500/10 border-green-500/20' 
                     : 'bg-yellow-500/10 border-yellow-500/20'
                 }`}>
                   <p className={`text-xs font-medium mb-1 ${
-                    aiReviewResult.status === 'approved' ? 'text-green-600' : 'text-yellow-600'
+                    (aiReviewResult.result?.status === 'safe' || aiReviewResult.status === 'approved') ? 'text-green-600' : 'text-yellow-600'
                   }`}>
                     AI Content Review Result:
                   </p>
                   <p className="text-xs">
-                    Status: {aiReviewResult.status === 'approved' ? '✅ Approved' : '⚠️ Flagged'}
+                    Status: {(aiReviewResult.result?.status === 'safe' || aiReviewResult.status === 'approved') ? '✅ Approved' : '⚠️ Flagged'}
                   </p>
-                  {aiReviewResult.confidence && (
+                  {aiReviewResult.result?.confidence && (
                     <p className="text-xs">
-                      Confidence: {Math.round(aiReviewResult.confidence * 100)}%
+                      Confidence: {Math.round(aiReviewResult.result.confidence * 100)}%
                     </p>
                   )}
-                  {aiReviewResult.message && (
+                  {aiReviewResult.message && (aiReviewResult.result?.status !== 'safe' && aiReviewResult.status !== 'approved') && (
                     <p className="text-xs mt-1 text-muted-foreground">
                       {aiReviewResult.message}
+                    </p>
+                  )}
+                  {(aiReviewResult.result?.status === 'safe' || aiReviewResult.status === 'approved') && (
+                    <p className="text-xs mt-1 text-green-600">
+                      {aiReviewResult.message || 'No issues detected.'}
                     </p>
                   )}
                 </div>
@@ -498,14 +503,14 @@ export function BlockchainUploadProgress({ uploadData, onComplete, onCancel }: B
               {status === 'success' && (
                 <div className="text-center">
                   <p className="text-sm text-green-600 mb-2">
-                    🎉 Upload completed! Redirecting to square...
+                    🎉 Upload completed! Click below to continue.
                   </p>
                   <Button
                     onClick={() => onComplete(null)}
                     className="w-full bg-green-600 hover:bg-green-700"
                   >
                     <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Go to Square Now
+                    Go to Square
                   </Button>
                 </div>
               )}

@@ -12,7 +12,7 @@ import type { Work } from '../client';
 export async function getAllWorks(limit = 100): Promise<Work[]> {
   try {
     const { data, error } = await supabase
-      .from('work_details')
+      .from('works_with_licenses')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -31,7 +31,7 @@ export async function getAllWorks(limit = 100): Promise<Work[]> {
 export async function getWorkById(workId: number): Promise<Work | null> {
   try {
     const { data, error } = await supabase
-      .from('works')
+      .from('works_with_licenses')
       .select('*')
       .eq('work_id', workId)
       .single();
@@ -51,7 +51,7 @@ export async function getWorkById(workId: number): Promise<Work | null> {
 export async function getWorksByCreator(creatorAddress: string): Promise<Work[]> {
   try {
     const { data, error } = await supabase
-      .from('work_details')
+      .from('works_with_licenses')
       .select('*')
       .eq('creator_address', creatorAddress.toLowerCase())
       .order('created_at', { ascending: false });
@@ -142,25 +142,53 @@ export async function getWorkGenealogy(workId: number): Promise<{
       throw new Error('Work not found');
     }
 
-    // 如果当前作品有父作品，获取根作品
+    // 确定根作品：如果当前作品有父作品，获取根作品；否则当前作品就是根作品
     let rootWork = currentWork;
     if (currentWork.parent_work_id) {
-      const parentWork = await getWorkById(currentWork.parent_work_id);
+      // 递归查找根作品
+      let parentWork = await getWorkById(currentWork.parent_work_id);
+      while (parentWork && parentWork.parent_work_id) {
+        const grandParent = await getWorkById(parentWork.parent_work_id);
+        if (grandParent) {
+          parentWork = grandParent;
+        } else {
+          break;
+        }
+      }
       if (parentWork) {
         rootWork = parentWork;
       }
     }
 
-    // 获取分类的衍生作品
+    // 获取根作品的所有直接衍生作品
     const { authorContinuations, authorizedDerivatives } = await getCategorizedDerivatives(rootWork.work_id);
 
+    // 如果当前查看的作品本身就是衍生作品，还需要获取它的衍生作品
+    let allContinuations = [...authorContinuations];
+    let allDerivatives = [...authorizedDerivatives];
+
+    if (currentWork.work_id !== rootWork.work_id) {
+      const { authorContinuations: currentContinuations, authorizedDerivatives: currentDerivatives } = 
+        await getCategorizedDerivatives(currentWork.work_id);
+      allContinuations = [...allContinuations, ...currentContinuations];
+      allDerivatives = [...allDerivatives, ...currentDerivatives];
+    }
+
+    // 去重（以防有重复）
+    const uniqueContinuations = allContinuations.filter((item, index, self) => 
+      index === self.findIndex(t => t.work_id === item.work_id)
+    );
+    const uniqueDerivatives = allDerivatives.filter((item, index, self) => 
+      index === self.findIndex(t => t.work_id === item.work_id)
+    );
+
     // 计算总衍生数量
-    const totalDerivatives = authorContinuations.length + authorizedDerivatives.length;
+    const totalDerivatives = uniqueContinuations.length + uniqueDerivatives.length;
 
     return {
       root: rootWork,
-      continuations: authorContinuations,
-      derivatives: authorizedDerivatives,
+      continuations: uniqueContinuations,
+      derivatives: uniqueDerivatives,
       totalDerivatives
     };
   } catch (error) {

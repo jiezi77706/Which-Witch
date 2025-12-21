@@ -9,12 +9,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { UserProfile } from "./app-container"
-import { UploadCloud, CheckCircle2, X } from "lucide-react"
+import { UploadCloud, CheckCircle2, X, Info, Shield, AlertTriangle } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { useAccount } from "wagmi"
 
 import { NetworkSwitcher } from "./network-switcher"
 import { useCollections } from "@/lib/hooks/useCollections"
+import { useWorks } from "@/lib/hooks/useWorks"
 import { useUser } from "@/lib/hooks/useUser"
 import { AIAdvisorButton } from "./ai-advisor/ai-advisor-button"
 import { LicenseSelectorButton } from "./license-selector-button"
@@ -34,6 +35,7 @@ export function UploadView({
   const { address } = useAccount()
   const { user: dbUser } = useUser()
   const { collections, authStatuses } = useCollections(dbUser?.id)
+  const { works: userWorks } = useWorks(address) // 获取用户自己的作品
   
   // 使用 ref 跟踪上传状态，防止重复上传
   const isUploadingRef = useRef(false)
@@ -41,14 +43,6 @@ export function UploadView({
   const [mode, setMode] = useState<"original" | "remix">(preselectedParentWorkId ? "remix" : "original")
   const [selectedParentWork, setSelectedParentWork] = useState<number | null>(preselectedParentWorkId || null)
   
-  // 当预选的 parent work 改变时更新状态
-  useEffect(() => {
-    if (preselectedParentWorkId) {
-      setMode("remix")
-      setSelectedParentWork(preselectedParentWorkId)
-    }
-  }, [preselectedParentWorkId])
-
   const [files, setFiles] = useState<File[]>([])
   const [allowRemix, setAllowRemix] = useState(false)
   const [tags, setTags] = useState<string[]>([])
@@ -65,17 +59,58 @@ export function UploadView({
     story: "",
     licenseFee: "0.05"
   })
+  
+  // 新增状态：质押保证金
+  const [agreeToStake, setAgreeToStake] = useState(false)
+  const [showStakeInfo, setShowStakeInfo] = useState(false)
+  
+  // 当预选的 parent work 改变时更新状态
+  useEffect(() => {
+    if (preselectedParentWorkId) {
+      setMode("remix")
+      setSelectedParentWork(preselectedParentWorkId)
+    }
+  }, [preselectedParentWorkId])
+
+  // 根据许可证选择自动调整remix设置
+  useEffect(() => {
+    if (licenseSelection?.derivative === 'B2') {
+      setAllowRemix(false)
+    }
+  }, [licenseSelection])
 
 
 
   const SUGGESTED_TAGS = ["Cyberpunk", "Minimalist", "Nature", "Abstract", "Surreal"]
   const SUGGESTED_MATERIALS = ["Digital", "Wood", "Clay", "Glass", "Metal"]
 
-  // Get approved works from collections
+  // Get approved works from collections and user's own works
   const approvedWorks = collections?.filter(c => {
     const work = c.work_details || c.works || c.work
     return authStatuses[c.work_id] === 'approved' && work?.allow_remix
   }) || []
+
+  // Add user's own works as available parent works (for continue creating)
+  const userOwnWorks = userWorks?.map(work => ({
+    work_id: work.work_id,
+    work_details: {
+      work_id: work.work_id,
+      title: work.title,
+      image_url: work.image_url,
+      creator_address: work.creator_address,
+      allow_remix: work.allow_remix,
+      tags: work.tags,
+      material: work.material
+    }
+  })) || []
+
+  // Combine approved works and user's own works, removing duplicates
+  const allAvailableWorks = [
+    ...approvedWorks,
+    ...userOwnWorks.filter(userWork => 
+      !approvedWorks.some(approved => approved.work_id === userWork.work_id)
+    )
+  ]
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -103,6 +138,7 @@ export function UploadView({
         tags: tags,
         allowRemix: allowRemix,
         licenseFee: formData.licenseFee,
+        licenseSelection: licenseSelection, // 使用许可证选择对象
         isRemix: mode === "remix",
         parentWorkId: mode === "remix" ? selectedParentWork : undefined,
         licenseSelection: licenseSelection,
@@ -257,8 +293,8 @@ export function UploadView({
           </div>
           
           {/* Selected Parent Work Display */}
-          {selectedParentWork && approvedWorks.find(w => w.work_id === selectedParentWork) && (() => {
-            const selectedCollection = approvedWorks.find(w => w.work_id === selectedParentWork)
+          {selectedParentWork && allAvailableWorks.find(w => w.work_id === selectedParentWork) && (() => {
+            const selectedCollection = allAvailableWorks.find(w => w.work_id === selectedParentWork)
             const work = selectedCollection?.work_details || selectedCollection?.works || selectedCollection?.work
             return (
               <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
@@ -304,8 +340,8 @@ export function UploadView({
           {/* Parent Work Grid */}
           {!selectedParentWork && (
             <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-2">
-              {approvedWorks.length > 0 ? (
-                approvedWorks.map((collection) => {
+              {allAvailableWorks.length > 0 ? (
+                allAvailableWorks.map((collection) => {
                   const work = collection.work_details || collection.works || collection.work
                   return (
                     <div
@@ -334,7 +370,7 @@ export function UploadView({
             </div>
           )}
           
-          {approvedWorks.length > 0 && !selectedParentWork && (
+          {allAvailableWorks.length > 0 && !selectedParentWork && (
             <p className="text-xs text-red-500">⚠️ Please select a parent work to proceed.</p>
           )}
         </div>
@@ -506,8 +542,15 @@ export function UploadView({
             <div className="space-y-0.5">
               <Label className="text-base">Allow Remixing</Label>
               <p className="text-xs text-muted-foreground">Allow others to create derivative works</p>
+              {licenseSelection && licenseSelection.derivative === 'B2' && (
+                <p className="text-xs text-red-500">⚠️ Current license doesn't allow derivatives</p>
+              )}
             </div>
-            <Switch checked={allowRemix} onCheckedChange={setAllowRemix} />
+            <Switch 
+              checked={allowRemix} 
+              onCheckedChange={setAllowRemix}
+              disabled={licenseSelection?.derivative === 'B2'}
+            />
           </div>
 
           {/* License Configuration - 必须选择 */}
@@ -572,6 +615,56 @@ export function UploadView({
             </div>
           </div>
 
+          {/* Security Deposit Agreement */}
+          <div className="space-y-4 p-4 border rounded-lg bg-orange-500/5 border-orange-500/20">
+            <div className="flex items-start gap-3">
+              <Shield className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+              <div className="space-y-2 flex-1">
+                <Label className="text-base text-orange-600">Security Deposit Required</Label>
+                <p className="text-xs text-muted-foreground">
+                  To prevent spam and ensure quality, all uploads require a security deposit of <strong>0.00001 ETH</strong>.
+                  This deposit will be returned after 7 days if no valid copyright disputes are filed.
+                </p>
+                
+                <div className="flex items-start gap-2 mt-3">
+                  <input
+                    type="checkbox"
+                    id="agree-stake"
+                    checked={agreeToStake}
+                    onChange={(e) => setAgreeToStake(e.target.checked)}
+                    className="mt-1"
+                  />
+                  <label htmlFor="agree-stake" className="text-sm cursor-pointer">
+                    I agree to stake <strong>0.00001 ETH</strong> as security deposit. I understand this amount will be returned after 7 days if no valid disputes are filed against my work.
+                  </label>
+                </div>
+
+                {showStakeInfo && (
+                  <div className="mt-3 p-3 bg-background/50 rounded-lg text-xs space-y-2">
+                    <p><strong>How it works:</strong></p>
+                    <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                      <li>Your deposit is held in a smart contract</li>
+                      <li>After 7 days, you can mint your work as NFT</li>
+                      <li>If disputed and found guilty, deposit goes to reporter</li>
+                      <li>If no disputes or disputes are invalid, you get full refund</li>
+                    </ul>
+                  </div>
+                )}
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowStakeInfo(!showStakeInfo)}
+                  className="text-xs h-6 px-2 text-orange-600 hover:text-orange-700"
+                >
+                  <Info className="w-3 h-3 mr-1" />
+                  {showStakeInfo ? 'Hide Details' : 'Learn More'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {allowRemix && (
             <div className="space-y-4 animate-in slide-in-from-top-2">
               {/* Licensing Fee */}
@@ -597,10 +690,43 @@ export function UploadView({
         <Button
           type="submit"
           className="w-full h-12 text-lg"
-          disabled={files.length === 0 || !formData.title || isUploadingRef.current || (mode === "remix" && !selectedParentWork) || !licenseSelection}
+          disabled={files.length === 0 || !formData.title || isUploadingRef.current || (mode === "remix" && !selectedParentWork) || !licenseSelection || !agreeToStake}
         >
           {mode === "remix" ? "Upload Remix to Blockchain" : "Upload Work to Blockchain"}
         </Button>
+        
+        {/* Privacy Notice */}
+        <div className="text-center p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+          <p className="text-xs text-blue-600 font-medium mb-1">🔒 Privacy Protection</p>
+          <p className="text-xs text-muted-foreground">
+            Your uploaded works will not be used as training data for AI models. 
+            We respect your intellectual property and creative rights.
+          </p>
+        </div>
+        
+        {/* Upload Requirements Summary */}
+        <div className="text-xs text-muted-foreground space-y-1 p-3 bg-muted/30 rounded-lg">
+          <p className="font-medium mb-2">Upload Requirements:</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div className={`flex items-center gap-2 ${files.length > 0 ? 'text-green-600' : ''}`}>
+              {files.length > 0 ? '✓' : '○'} Files selected
+            </div>
+            <div className={`flex items-center gap-2 ${formData.title ? 'text-green-600' : ''}`}>
+              {formData.title ? '✓' : '○'} Title provided
+            </div>
+            <div className={`flex items-center gap-2 ${licenseSelection ? 'text-green-600' : ''}`}>
+              {licenseSelection ? '✓' : '○'} License selected
+            </div>
+            <div className={`flex items-center gap-2 ${agreeToStake ? 'text-green-600' : ''}`}>
+              {agreeToStake ? '✓' : '○'} Deposit agreed
+            </div>
+            {mode === "remix" && (
+              <div className={`flex items-center gap-2 col-span-2 ${selectedParentWork ? 'text-green-600' : ''}`}>
+                {selectedParentWork ? '✓' : '○'} Parent work selected
+              </div>
+            )}
+          </div>
+        </div>
       </form>
     </div>
   )
