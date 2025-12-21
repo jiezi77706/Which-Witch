@@ -57,8 +57,16 @@ export function ProfileView({ user, onContinueCreating }: {
     
     setLoadingBalance(true)
     try {
+      console.log('🔍 Loading balance for address:', address)
+      console.log('📍 Using contract address:', process.env.NEXT_PUBLIC_CONTRACT_ADDRESS_PAYMENT)
+      
       const revenue = await getCreatorRevenue(address)
-      setBalance(formatEther(revenue))
+      console.log('💰 Raw revenue from contract:', revenue.toString(), 'wei')
+      
+      const formattedBalance = formatEther(revenue)
+      console.log('💵 Formatted balance:', formattedBalance, 'ETH')
+      
+      setBalance(formattedBalance)
     } catch (error) {
       console.error("Error loading balance:", error)
       setBalance("0")

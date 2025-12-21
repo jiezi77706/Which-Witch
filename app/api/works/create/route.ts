@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       console.log('✅ Work updated successfully');
       
       // 更新许可证信息
-      if (workData.licenseSelection && workData.allowRemix) {
+      if (workData.licenseSelection) {
         console.log('💾 Updating license information...');
         
         try {
@@ -117,8 +117,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 如果有许可证信息且允许remix，保存许可证信息
-    if (workData.licenseSelection && workData.allowRemix) {
+    // 如果有许可证信息，保存许可证信息
+    if (workData.licenseSelection) {
       console.log('💾 Saving license information...');
       
       try {

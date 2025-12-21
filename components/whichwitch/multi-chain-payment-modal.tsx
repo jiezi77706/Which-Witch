@@ -332,8 +332,8 @@ export function MultiChainPaymentModal({
                 </div>
               </div>
 
-              {/* Fee Estimation */}
-              {estimatedFees && (
+              {/* Fee Estimation - 隐藏详细费用信息 */}
+              {estimatedFees && false && (
                 <Card className="bg-primary/5 border-primary/20">
                   <CardContent className="p-4">
                     <div className="space-y-2 text-sm">
@@ -432,8 +432,9 @@ export function MultiChainPaymentModal({
                   !isConnected || 
                   !isOnCorrectChain || 
                   !amount || 
-                  parseFloat(amount) <= 0 ||
-                  (balance && parseFloat(ethers.formatEther(balance.value)) < parseFloat(estimatedFees?.total || '0'))
+                  parseFloat(amount) <= 0
+                  // 移除余额检查，因为我们隐藏了费用估算
+                  // (balance && parseFloat(ethers.formatEther(balance.value)) < parseFloat(estimatedFees?.total || '0'))
                 }
                 className="flex-1 bg-primary hover:bg-primary/90"
               >
@@ -452,15 +453,17 @@ export function MultiChainPaymentModal({
             )}
           </div>
 
-          {/* Info Text */}
-          <div className="text-xs text-muted-foreground text-center space-y-1">
-            <p>
-              {selectedChain === 11155111 
-                ? 'Direct payment on Sepolia network, no cross-chain fees'
-                : `Cross-chain payment via protocol, estimated ${TestnetCrossChainService.getEstimatedTime(selectedChain)} arrival`
-              }
-            </p>
-          </div>
+          {/* Info Text - 隐藏底部说明文字 */}
+          {false && (
+            <div className="text-xs text-muted-foreground text-center space-y-1">
+              <p>
+                {selectedChain === 11155111 
+                  ? 'Direct payment on Sepolia network, no cross-chain fees'
+                  : `Cross-chain payment via protocol, estimated ${TestnetCrossChainService.getEstimatedTime(selectedChain)} arrival`
+                }
+              </p>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

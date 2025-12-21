@@ -2,83 +2,117 @@
  * 作品授权声明书生成服务
  */
 
-export interface LicenseDeclarationData {
-  workId: string;
-  workTitle: string;
-  workType: string;
-  authorName: string;
-  walletAddress: string;
-  licenseType: string;
-  createdAt: Date;
-  contentHash?: string; // IPFS CID
-}
-
+// 许可证类型信息接口
 export interface LicenseTypeInfo {
   code: string;
   name: string;
   description: string;
   allowCommercial: boolean;
   allowDerivatives: boolean;
+  allowNFT: boolean;
   requireShareAlike: boolean;
 }
 
-// 支持的授权类型
+// 预定义的许可证类型
 export const LICENSE_TYPES: Record<string, LicenseTypeInfo> = {
   'CC_BY': {
     code: 'CC BY',
-    name: 'Creative Commons Attribution 4.0',
-    description: '允许他人分发、混合、调整和基于您的作品进行创作，甚至是商业性使用，只要他们注明您的姓名。',
+    name: 'CC BY - Attribution',
+    description: '允许商业使用、二次创作和NFT铸造，只需署名。',
     allowCommercial: true,
     allowDerivatives: true,
-    requireShareAlike: false
+    allowNFT: true,
+    requireShareAlike: false,
   },
   'CC_BY_NC': {
     code: 'CC BY-NC',
-    name: 'Creative Commons Attribution-NonCommercial 4.0',
-    description: '允许他人下载、分享和基于您的作品进行创作，但不能用于商业目的，且必须注明您的姓名。',
+    name: 'CC BY-NC - Non-Commercial',
+    description: '允许非商业使用和二次创作，禁止商业使用和NFT铸造。',
     allowCommercial: false,
     allowDerivatives: true,
-    requireShareAlike: false
+    allowNFT: false,
+    requireShareAlike: false,
   },
   'CC_BY_NC_SA': {
     code: 'CC BY-NC-SA',
-    name: 'Creative Commons Attribution-NonCommercial-ShareAlike 4.0',
-    description: '允许他人下载、分享和基于您的作品进行创作，但不能用于商业目的，必须注明您的姓名，且新作品需采用相同授权。',
+    name: 'CC BY-NC-SA - ShareAlike',
+    description: '允许非商业使用和二次创作，衍生作品必须采用相同授权。',
     allowCommercial: false,
     allowDerivatives: true,
-    requireShareAlike: true
+    allowNFT: false,
+    requireShareAlike: true,
   },
   'CC_BY_SA': {
     code: 'CC BY-SA',
-    name: 'Creative Commons Attribution-ShareAlike 4.0',
-    description: '允许他人分发、混合、调整和基于您的作品进行创作，甚至是商业性使用，但新作品需采用相同授权，且必须注明您的姓名。',
+    name: 'CC BY-SA - ShareAlike',
+    description: '允许商业使用、二次创作和NFT铸造，衍生作品必须采用相同授权。',
     allowCommercial: true,
     allowDerivatives: true,
-    requireShareAlike: true
+    allowNFT: true,
+    requireShareAlike: true,
   },
-  'CUSTOM': {
-    code: '自定义授权',
-    name: '自定义授权条款',
-    description: '作者自定义的特殊授权条款，具体权限以声明书内容为准。',
+  'CC_BY_ND': {
+    code: 'CC BY-ND',
+    name: 'CC BY-ND - No Derivatives',
+    description: '允许商业使用，但禁止二次创作和NFT铸造。',
+    allowCommercial: true,
+    allowDerivatives: false,
+    allowNFT: false,
+    requireShareAlike: false,
+  },
+  'CC_BY_NC_ND': {
+    code: 'CC BY-NC-ND',
+    name: 'CC BY-NC-ND - Most Restrictive',
+    description: '仅允许非商业使用，禁止二次创作和NFT铸造。',
     allowCommercial: false,
     allowDerivatives: false,
-    requireShareAlike: false
+    allowNFT: false,
+    requireShareAlike: false,
   },
   'ALL_RIGHTS_RESERVED': {
     code: '保留全部权利',
-    name: '保留全部权利',
-    description: '作者保留对作品的全部权利，未经明确授权不得使用。',
+    name: 'All Rights Reserved',
+    description: '保留全部权利，严格控制作品使用，需要明确授权。',
     allowCommercial: false,
     allowDerivatives: false,
-    requireShareAlike: false
-  }
+    allowNFT: false,
+    requireShareAlike: false,
+  },
 };
+
+export interface LicenseDeclarationData {
+  workId: string;
+  workTitle: string;
+  workType: string;
+  authorName: string;
+  walletAddress: string;
+  licenseSelection: LicenseSelection; // 使用现有的许可证选择数据
+  createdAt: Date;
+  contentHash?: string; // IPFS CID
+}
+
+// 从现有的license-selector-modal导入类型
+export interface LicenseSelection {
+  commercial: string; // A1, A2, A3
+  derivative: string; // B1, B2
+  nft: string; // C1, C2
+  shareAlike: string; // D1, D2
+  licenseCode: string;
+  licenseName: string;
+  description: string;
+}
 
 /**
  * 生成作品授权声明书内容
  */
 export function generateLicenseDeclaration(data: LicenseDeclarationData): string {
-  const licenseInfo = LICENSE_TYPES[data.licenseType] || LICENSE_TYPES['ALL_RIGHTS_RESERVED'];
+  const license = data.licenseSelection;
+  
+  // 解析许可证权限
+  const allowCommercial = license.commercial === 'A1';
+  const allowDerivatives = license.derivative === 'B1';
+  const allowNFT = license.nft === 'C1';
+  const requireShareAlike = license.shareAlike === 'D1';
   
   const declaration = `
 # 作品授权声明 (Author's License Declaration)
@@ -91,13 +125,36 @@ export function generateLicenseDeclaration(data: LicenseDeclarationData): string
 
 作者基于自身意愿，就他人使用本作品的权限范围作出如下授权选择：
 
-**本作品采用 ${licenseInfo.code} 授权。**
+**本作品采用 ${license.licenseCode} 授权。**
 
-${licenseInfo.description}
+**授权名称：** ${license.licenseName}  
+**授权描述：** ${license.description}
 
-依该授权，他人是否可以对本作品进行商业使用、是否可以进行二次创作（包括但不限于改编、演绎、同人创作）、以及衍生作品是否需保持相同授权方式，均以本授权类型及其对应条款为准。
+### 具体权限说明
 
-除明确允许的情形外，任何超出授权范围的使用行为，均不被许可并构成侵权。
+**商业使用权限：**
+${allowCommercial 
+  ? '✅ **允许商业使用** - 他人可将本作品用于商业目的，包括但不限于销售、营销、广告等商业活动。' 
+  : '❌ **禁止商业使用** - 本作品仅限非商业用途使用，任何商业性质的使用均需获得作者明确的书面授权。'
+}
+
+**衍生作品权限：**
+${allowDerivatives 
+  ? '✅ **允许创作衍生作品** - 他人可基于本作品进行改编、演绎、混合等创作活动，创作衍生作品。' 
+  : '❌ **禁止创作衍生作品** - 本作品不允许任何形式的改编、演绎或衍生创作，仅可按原样使用。'
+}
+
+**NFT铸造权限：**
+${allowNFT 
+  ? '✅ **允许NFT铸造** - 在遵守其他授权条款的前提下，允许将本作品铸造为NFT。' 
+  : '❌ **禁止NFT铸造** - 严格禁止将本作品铸造为NFT或任何形式的数字资产代币。'
+}
+
+**相同授权要求：**
+${requireShareAlike 
+  ? '⚠️ **要求相同授权** - 基于本作品创作的衍生作品必须采用与本作品相同的授权条款。' 
+  : '✅ **无相同授权要求** - 衍生作品可采用不同的授权条款。'
+}
 
 ## 统一禁止条款
 
@@ -121,6 +178,14 @@ ${licenseInfo.description}
 
 如本授权类型要求署名，使用者应以清晰、合理且不具误导性的方式标注作者署名、作品来源，并注明本授权声明或其对应链接。署名方式不得暗示作者对使用者或其行为的认可、合作或背书。
 
+**标准署名格式：**
+\`\`\`
+作品：${data.workTitle}
+作者：${data.authorName}
+授权：${license.licenseCode}
+声明：[链接到本声明书]
+\`\`\`
+
 ## 区块链证明
 
 本授权声明在发布时生成唯一的内容指纹(CID)，并记录于区块链账本中，作为本声明内容、发布时间及作者身份关联关系的不可篡改证明。
@@ -137,6 +202,7 @@ ${licenseInfo.description}
 
 **声明生成时间：** ${data.createdAt.toLocaleString('zh-CN')}  
 **作品ID：** ${data.workId}  
+**许可证代码：** ${license.licenseCode}  
 **内容哈希：** ${data.contentHash || '待生成'}  
 **区块链记录：** [查看链上证明](#)
 
@@ -149,22 +215,28 @@ ${licenseInfo.description}
 /**
  * 生成声明书的简短摘要（用于作品卡片显示）
  */
-export function generateLicenseSummary(licenseType: string): string {
-  const licenseInfo = LICENSE_TYPES[licenseType] || LICENSE_TYPES['ALL_RIGHTS_RESERVED'];
-  
+export function generateLicenseSummary(licenseSelection: LicenseSelection): string {
   const permissions = [];
-  if (licenseInfo.allowCommercial) permissions.push('商用');
-  if (licenseInfo.allowDerivatives) permissions.push('二创');
-  if (licenseInfo.requireShareAlike) permissions.push('相同授权');
+  
+  if (licenseSelection.commercial === 'A1') permissions.push('商用');
+  if (licenseSelection.derivative === 'B1') permissions.push('二创');
+  if (licenseSelection.nft === 'C1') permissions.push('NFT');
+  if (licenseSelection.shareAlike === 'D1') permissions.push('相同授权');
   
   return permissions.length > 0 
-    ? `${licenseInfo.code} (允许: ${permissions.join('、')})`
-    : `${licenseInfo.code} (保留全部权利)`;
+    ? `${licenseSelection.licenseCode} (允许: ${permissions.join('、')})`
+    : `${licenseSelection.licenseCode} (限制使用)`;
 }
 
 /**
- * 验证授权类型是否有效
+ * 验证许可证选择是否有效
  */
-export function isValidLicenseType(licenseType: string): boolean {
-  return licenseType in LICENSE_TYPES;
+export function isValidLicenseSelection(licenseSelection: any): licenseSelection is LicenseSelection {
+  return licenseSelection && 
+         typeof licenseSelection.commercial === 'string' &&
+         typeof licenseSelection.derivative === 'string' &&
+         typeof licenseSelection.nft === 'string' &&
+         typeof licenseSelection.shareAlike === 'string' &&
+         typeof licenseSelection.licenseCode === 'string' &&
+         typeof licenseSelection.licenseName === 'string';
 }

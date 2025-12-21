@@ -45,6 +45,16 @@ export interface Work {
   is_remix: boolean;
   created_at: string;
   updated_at: string;
+  // 许可证信息（来自work_licenses表）
+  license_code?: string;
+  license_name?: string;
+  commercial_use?: string;
+  derivative_works?: string;
+  nft_minting?: string;
+  share_alike?: string;
+  custom_terms?: string;
+  license_description?: string;
+  license_url?: string;
 }
 
 export interface Folder {

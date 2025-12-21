@@ -124,7 +124,7 @@ export function CrossChainTipModal({
   }
 
   const handleSendTip = async () => {
-    if (!recipientAddress || recipientAddress === '0x0000000000000000000000000000000000000000') {
+    if (!recipientAddress || recipientAddress === '0x0000000000000000000000000000000000000000' || recipientAddress === 'null') {
       toast.error('无效的接收地址')
       return
     }
@@ -198,7 +198,9 @@ export function CrossChainTipModal({
             <div className="flex justify-between text-sm">
               <span>接收地址:</span>
               <span className="font-mono text-xs">
-                {recipientAddress ? `${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}` : 'N/A'}
+                {recipientAddress && recipientAddress !== 'null' && recipientAddress !== '0x0000000000000000000000000000000000000000' 
+                  ? `${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}` 
+                  : 'N/A'}
               </span>
             </div>
           </div>

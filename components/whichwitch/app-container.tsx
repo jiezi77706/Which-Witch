@@ -106,6 +106,7 @@ export function WhichwitchApp() {
 
   // 显示上传结果页面
   if (showUploadResult && uploadWorkData) {
+    console.log('🎯 Rendering UploadResultPage with:', { showUploadResult, uploadWorkData });
     return (
       <UploadResultPage
         workData={uploadWorkData}
@@ -231,14 +232,18 @@ export function WhichwitchApp() {
                     setActiveTab("upload")
                   }}
                   onUploadWork={(workData) => {
+                    console.log('🎯 onUploadWork called with workData:', workData);
                     // 触发上传结果页面
-                    setUploadWorkData({
+                    const uploadData = {
                       id: workData.id,
                       title: workData.title || 'Remix Work',
                       image: workData.image || '/placeholder.svg',
                       creator: user?.did || 'Unknown'
-                    })
-                    setShowUploadResult(true)
+                    };
+                    console.log('🎯 Setting uploadWorkData:', uploadData);
+                    setUploadWorkData(uploadData);
+                    console.log('🎯 Setting showUploadResult to true');
+                    setShowUploadResult(true);
                   }}
                 />
               </TabsContent>

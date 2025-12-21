@@ -1079,7 +1079,12 @@ export function WorkDetailDialog({
                   authorName={work.author}
                   walletAddress={work.creator_address || work.creator || '0x0000000000000000000000000000000000000000'}
                   currentUserWallet={address}
-                  licenseType={work.license_type || (work.allowRemix ? 'CC_BY_NC' : 'ALL_RIGHTS_RESERVED')}
+                  licenseCode={work.license_code}
+                  licenseName={work.license_name}
+                  commercialUse={work.commercial_use}
+                  derivativeWorks={work.derivative_works}
+                  nftMinting={work.nft_minting}
+                  shareAlike={work.share_alike}
                   className="mt-3"
                 />
               </div>

@@ -3,12 +3,21 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import LicenseTypeSelector from '@/components/whichwitch/license-type-selector';
 import LicenseDeclarationLink from '@/components/whichwitch/license-declaration-link';
-import { generateLicenseDeclaration, generateLicenseSummary } from '@/lib/services/license-declaration.service';
+import { generateLicenseDeclaration, generateLicenseSummary, LicenseSelection } from '@/lib/services/license-declaration.service';
 
 export default function TestLicenseDeclarationPage() {
-  const [licenseType, setLicenseType] = useState('ALL_RIGHTS_RESERVED');
+  // 模拟许可证选择数据
+  const [licenseSelection] = useState<LicenseSelection>({
+    commercial: 'A2',
+    derivative: 'B1',
+    nft: 'C2',
+    shareAlike: 'D1',
+    licenseCode: 'CC BY-NC-SA',
+    licenseName: 'CC BY-NC-SA - ShareAlike',
+    description: 'Non-commercial derivatives allowed, must use same license'
+  });
+  
   const [generatedDeclaration, setGeneratedDeclaration] = useState<string>('');
 
   const handleGeneratePreview = () => {
@@ -18,7 +27,7 @@ export default function TestLicenseDeclarationPage() {
       workType: '数字插画',
       authorName: '测试作者',
       walletAddress: '0x1234567890123456789012345678901234567890',
-      licenseType: licenseType,
+      licenseSelection: licenseSelection,
       createdAt: new Date()
     };
 
@@ -31,24 +40,37 @@ export default function TestLicenseDeclarationPage() {
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold mb-4">授权声明书功能测试</h1>
-          <p className="text-gray-600">测试授权类型选择器和声明书生成功能</p>
+          <p className="text-gray-600">测试基于现有许可证选择的声明书生成功能</p>
         </div>
 
-        {/* 授权类型选择器测试 */}
+        {/* 许可证选择数据展示 */}
         <Card>
           <CardHeader>
-            <CardTitle>1. 授权类型选择器</CardTitle>
+            <CardTitle>1. 当前许可证选择数据</CardTitle>
           </CardHeader>
           <CardContent>
-            <LicenseTypeSelector
-              value={licenseType}
-              onChange={setLicenseType}
-            />
-            
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <h4 className="font-medium mb-2">当前选择:</h4>
-              <p><strong>类型:</strong> {licenseType}</p>
-              <p><strong>摘要:</strong> {generateLicenseSummary(licenseType)}</p>
+            <div className="space-y-2">
+              <p><strong>许可证代码:</strong> {licenseSelection.licenseCode}</p>
+              <p><strong>许可证名称:</strong> {licenseSelection.licenseName}</p>
+              <p><strong>描述:</strong> {licenseSelection.description}</p>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                  <strong>商业使用:</strong> {licenseSelection.commercial === 'A1' ? '✅ 允许' : '❌ 禁止'}
+                </div>
+                <div>
+                  <strong>衍生作品:</strong> {licenseSelection.derivative === 'B1' ? '✅ 允许' : '❌ 禁止'}
+                </div>
+                <div>
+                  <strong>NFT铸造:</strong> {licenseSelection.nft === 'C1' ? '✅ 允许' : '❌ 禁止'}
+                </div>
+                <div>
+                  <strong>相同授权:</strong> {licenseSelection.shareAlike === 'D1' ? '⚠️ 要求' : '✅ 不要求'}
+                </div>
+              </div>
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium mb-2">摘要显示:</h4>
+                <p>{generateLicenseSummary(licenseSelection)}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -85,7 +107,7 @@ export default function TestLicenseDeclarationPage() {
               authorName="测试作者"
               walletAddress="0x1234567890123456789012345678901234567890"
               currentUserWallet="0x1234567890123456789012345678901234567890"
-              licenseType={licenseType}
+              licenseSelection={licenseSelection}
             />
           </CardContent>
         </Card>
@@ -111,7 +133,7 @@ export default function TestLicenseDeclarationPage() {
                         workType: '数字插画',
                         authorName: '测试作者',
                         walletAddress: '0x1234567890123456789012345678901234567890',
-                        licenseType: licenseType
+                        licenseSelection: licenseSelection
                       }),
                     });
                     

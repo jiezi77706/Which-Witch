@@ -1,20 +1,20 @@
 -- 创建授权声明书表
 CREATE TABLE IF NOT EXISTS license_declarations (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    work_id UUID NOT NULL,
+    work_id BIGINT NOT NULL, -- 使用链上作品ID，不是数据库ID
     work_title TEXT NOT NULL,
     work_type TEXT NOT NULL,
     author_name TEXT NOT NULL,
     wallet_address TEXT NOT NULL,
-    license_type TEXT NOT NULL,
+    license_selection JSONB NOT NULL, -- 存储完整的许可证选择对象
     declaration_content TEXT NOT NULL,
     content_hash TEXT, -- IPFS CID
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
-    -- 外键约束
+    -- 外键约束 - 引用works表的work_id字段（链上ID）
     CONSTRAINT fk_license_declarations_work_id 
-        FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+        FOREIGN KEY (work_id) REFERENCES works(work_id) ON DELETE CASCADE
 );
 
 -- 创建索引
@@ -48,8 +48,8 @@ CREATE POLICY "Authors can create license declarations" ON license_declarations
     FOR INSERT WITH CHECK (
         EXISTS (
             SELECT 1 FROM works 
-            WHERE works.id = work_id 
-            AND works.creator_wallet = wallet_address
+            WHERE works.work_id = license_declarations.work_id 
+            AND works.creator_address = wallet_address
         )
     );
 
@@ -57,8 +57,8 @@ CREATE POLICY "Authors can update their license declarations" ON license_declara
     FOR UPDATE USING (
         EXISTS (
             SELECT 1 FROM works 
-            WHERE works.id = work_id 
-            AND works.creator_wallet = wallet_address
+            WHERE works.work_id = license_declarations.work_id 
+            AND works.creator_address = wallet_address
         )
     );
 
@@ -91,7 +91,7 @@ BEGIN
     IF TG_OP = 'INSERT' THEN
         UPDATE works 
         SET has_license_declaration = TRUE 
-        WHERE id = NEW.work_id;
+        WHERE work_id = NEW.work_id;
         RETURN NEW;
     ELSIF TG_OP = 'DELETE' THEN
         UPDATE works 
@@ -101,7 +101,7 @@ BEGIN
                 WHERE work_id = OLD.work_id
             )
         )
-        WHERE id = OLD.work_id;
+        WHERE work_id = OLD.work_id;
         RETURN OLD;
     END IF;
     RETURN NULL;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { generateLicenseDeclaration, LicenseDeclarationData, isValidLicenseType } from '@/lib/services/license-declaration.service';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { generateLicenseDeclaration, LicenseDeclarationData, isValidLicenseSelection } from '@/lib/services/license-declaration.service';
 
 /**
  * 生成并保存作品授权声明书
@@ -8,31 +8,31 @@ import { generateLicenseDeclaration, LicenseDeclarationData, isValidLicenseType 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { workId, workTitle, workType, authorName, walletAddress, licenseType } = body;
+    const { workId, workTitle, workType, authorName, walletAddress, licenseSelection } = body;
 
     // 验证必填字段
-    if (!workId || !workTitle || !workType || !authorName || !walletAddress || !licenseType) {
+    if (!workId || !workTitle || !workType || !authorName || !walletAddress || !licenseSelection) {
       return NextResponse.json(
         { error: '缺少必填字段' },
         { status: 400 }
       );
     }
 
-    // 验证授权类型
-    if (!isValidLicenseType(licenseType)) {
+    // 验证许可证选择
+    if (!isValidLicenseSelection(licenseSelection)) {
       return NextResponse.json(
-        { error: '无效的授权类型' },
+        { error: '无效的许可证选择' },
         { status: 400 }
       );
     }
 
-    const supabase = createClient();
+    const supabase = supabaseAdmin;
 
     // 检查作品是否存在
     const { data: work, error: workError } = await supabase
       .from('works')
-      .select('id, title, creator_wallet')
-      .eq('id', workId)
+      .select('id, title, creator_address')
+      .eq('work_id', workId)
       .single();
 
     if (workError || !work) {
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证是否为作品创作者
-    if (work.creator_wallet.toLowerCase() !== walletAddress.toLowerCase()) {
+    if (work.creator_address.toLowerCase() !== walletAddress.toLowerCase()) {
       return NextResponse.json(
         { error: '只有作品创作者可以生成授权声明' },
         { status: 403 }
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       workType,
       authorName,
       walletAddress,
-      licenseType,
+      licenseSelection,
       createdAt: new Date()
     };
 
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
         work_type: workType,
         author_name: authorName,
         wallet_address: walletAddress,
-        license_type: licenseType,
+        license_selection: licenseSelection, // 存储完整的许可证选择对象
         declaration_content: declarationContent,
         content_hash: null, // 后续可以添加IPFS哈希
         created_at: new Date().toISOString()
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = createClient();
+    const supabase = supabaseAdmin;
 
     const { data: declaration, error } = await supabase
       .from('license_declarations')
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
         workType: declaration.work_type,
         authorName: declaration.author_name,
         walletAddress: declaration.wallet_address,
-        licenseType: declaration.license_type,
+        licenseSelection: declaration.license_selection,
         content: declaration.declaration_content,
         contentHash: declaration.content_hash,
         createdAt: declaration.created_at

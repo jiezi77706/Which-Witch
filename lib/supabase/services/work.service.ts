@@ -12,7 +12,7 @@ import type { Work } from '../client';
 export async function getAllWorks(limit = 100): Promise<Work[]> {
   try {
     const { data, error } = await supabase
-      .from('work_details')
+      .from('works_with_licenses')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -31,7 +31,7 @@ export async function getAllWorks(limit = 100): Promise<Work[]> {
 export async function getWorkById(workId: number): Promise<Work | null> {
   try {
     const { data, error } = await supabase
-      .from('works')
+      .from('works_with_licenses')
       .select('*')
       .eq('work_id', workId)
       .single();
@@ -51,7 +51,7 @@ export async function getWorkById(workId: number): Promise<Work | null> {
 export async function getWorksByCreator(creatorAddress: string): Promise<Work[]> {
   try {
     const { data, error } = await supabase
-      .from('work_details')
+      .from('works_with_licenses')
       .select('*')
       .eq('creator_address', creatorAddress.toLowerCase())
       .order('created_at', { ascending: false });
